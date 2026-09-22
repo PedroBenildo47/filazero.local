@@ -1,0 +1,28 @@
+# Dependencies and build output are recreated inside the image.
+node_modules
+.next
+out
+coverage
+
+# Never ship local configuration or history.
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.vscode
+
+# Not needed at runtime.
+tests
+docs
+scripts
+*.md
+!README.md
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Noise.
+npm-debug.log*
+yarn-error.log*
+.DS_Store

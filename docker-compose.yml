@@ -1,0 +1,97 @@
+# FilaZero — local/production stack with PostgreSQL.
+#
+#   cp .env.example .env      # fill DATABASE_URL-related secrets (see below)
+#   docker compose up --build
+#
+# The `migrate` service applies Prisma migrations once and exits; `app` only
+# starts after it completed successfully, so the schema is never behind the code.
+
+name: filazero
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-filazero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-filazero}
+      POSTGRES_DB: ${POSTGRES_DB:-filazero}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-filazero} -d ${POSTGRES_DB:-filazero}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # Not published by default: only the app needs to reach it. Uncomment to
+    # inspect with a local client.
+    # ports:
+    #   - "5432:5432"
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-filazero}:${POSTGRES_PASSWORD:-filazero}@db:5432/${POSTGRES_DB:-filazero}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+
+      # --- Core ---
+      DATABASE_URL: postgresql://${POSTGRES_USER:-filazero}:${POSTGRES_PASSWORD:-filazero}@db:5432/${POSTGRES_DB:-filazero}?schema=public
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # --- Auth (REQUIRED) ---
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set (openssl rand -base64 48)}
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-604800}
+      AUTH_PASSWORD_RESET_TTL_SECONDS: ${AUTH_PASSWORD_RESET_TTL_SECONDS:-3600}
+      # Keep false in production: it exposes reset tokens in the API response.
+      AUTH_EXPOSE_RESET_TOKEN: ${AUTH_EXPOSE_RESET_TOKEN:-false}
+      PASSWORD_HASH_ROUNDS: ${PASSWORD_HASH_ROUNDS:-12}
+
+      # --- Billing ---
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-invoice}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+      PAYMENT_WEBHOOK_TOLERANCE_SECONDS: ${PAYMENT_WEBHOOK_TOLERANCE_SECONDS:-300}
+      PAYMENT_CHECKOUT_URL_TEMPLATE: ${PAYMENT_CHECKOUT_URL_TEMPLATE:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      BILLING_BANK_NAME: ${BILLING_BANK_NAME:-}
+      BILLING_BANK_ACCOUNT: ${BILLING_BANK_ACCOUNT:-}
+      BILLING_BANK_IBAN: ${BILLING_BANK_IBAN:-}
+      TRIAL_DAYS: ${TRIAL_DAYS:-14}
+      TRIAL_PLAN_CODE: ${TRIAL_PLAN_CODE:-trial}
+
+      # --- Email ---
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-FilaZero <no-reply@filazero.local>}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:

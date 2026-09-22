@@ -1,0 +1,448 @@
+// =============================================================================
+// FilaZero — Prisma schema
+// PostgreSQL relational model for on-site queue management.
+//
+// Design rules (from the master specification):
+//   - Real persistence only. No mock data, no localStorage as a database.
+//   - Multi-tenancy: every operational entity is reachable from an organization.
+//   - Roles are enforced in the application/server layer, but the data model
+//     stores the source of truth (users.role, organization_members.role).
+//   - Ticket state machine: WAITING -> CALLED -> SERVING -> COMPLETED,
+//     plus CANCELLED / NO_SHOW as terminal alternatives.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  MANAGER
+  ADMINISTRATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DEACTIVATED
+}
+
+/// Status of a user's link to an organization/branch.
+enum MemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QueueStatus {
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+enum TicketStatus {
+  WAITING
+  CALLED
+  SERVING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum NotificationType {
+  QUEUE_JOINED
+  POSITION_CHANGED
+  CUSTOMER_CALLED
+  SERVING_STARTED
+  SERVICE_COMPLETED
+  TICKET_CANCELLED
+  QUEUE_STATUS_CHANGED
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  name            String     @db.VarChar(160)
+  email           String     @unique @db.VarChar(255)
+  phone           String?    @db.VarChar(32)
+  /// bcrypt hash. Never store or log a plaintext password.
+  passwordHash    String     @map("password_hash") @db.VarChar(255)
+  role            UserRole   @default(CUSTOMER)
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(6)
+  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships         OrganizationMember[]
+  tickets             Ticket[]
+  notifications       Notification[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]           @relation("AuditActor")
+
+  @@index([role, status])
+  @@map("users")
+}
+
+/// Refresh/session tokens. Only the hash of a token is persisted.
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  ipAddress String?   @map("ip_address") @db.VarChar(64)
+  userAgent String?   @map("user_agent") @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+/// Single-use password recovery tokens. Only the hash is persisted.
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String             @db.VarChar(200)
+  description String?            @db.Text
+  category    String?            @db.VarChar(120)
+  address     String?            @db.VarChar(255)
+  city        String?            @db.VarChar(120)
+  country     String?            @db.VarChar(120)
+  phone       String?            @db.VarChar(32)
+  email       String?            @db.VarChar(255)
+  status      OrganizationStatus @default(ACTIVE)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  branches     Branch[]
+  members      OrganizationMember[]
+  queues       Queue[]
+  subscription Subscription?
+  transactions Transaction[]
+
+  @@index([status])
+  @@index([city])
+  @@index([category])
+  @@index([name])
+  @@map("organizations")
+}
+
+model Branch {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(200)
+  address        String?      @db.VarChar(255)
+  city           String?      @db.VarChar(120)
+  status         BranchStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      OrganizationMember[]
+  queues       Queue[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([city])
+  @@map("branches")
+}
+
+/// Links a user to an organization and (optionally) to one branch.
+/// `branchId = null` means the membership covers every branch of the
+/// organization (typically used for MANAGER). Roles here must be STAFF or
+/// MANAGER; CUSTOMER access never requires a membership row.
+model OrganizationMember {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  branchId       String?      @map("branch_id") @db.Uuid
+  role           UserRole     @default(STAFF)
+  status         MemberStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, organizationId, branchId])
+  @@index([organizationId, role, status])
+  @@index([branchId])
+  @@map("organization_members")
+}
+
+// ---------------------------------------------------------------------------
+// Queue engine
+// ---------------------------------------------------------------------------
+
+model Queue {
+  id              String      @id @default(uuid()) @db.Uuid
+  organizationId  String      @map("organization_id") @db.Uuid
+  branchId        String      @map("branch_id") @db.Uuid
+  name            String      @db.VarChar(160)
+  description     String?     @db.Text
+  status          QueueStatus @default(CLOSED)
+  /// Monotonic counter used to generate ticket numbers atomically per queue.
+  ticketSequence  Int         @default(0) @map("ticket_sequence")
+  /// Ticket currently being handled. Maintained by the queue engine.
+  currentTicketId String?     @unique @map("current_ticket_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch        Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  currentTicket Ticket?      @relation("QueueCurrentTicket", fields: [currentTicketId], references: [id], onDelete: SetNull)
+  tickets       Ticket[]     @relation("QueueTickets")
+
+  @@unique([branchId, name])
+  @@index([organizationId, status])
+  @@index([branchId, status])
+  @@map("queues")
+}
+
+model Ticket {
+  id           String       @id @default(uuid()) @db.Uuid
+  queueId      String       @map("queue_id") @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  /// Sequential per queue (1, 2, 3, ...). Generated inside a transaction.
+  ticketNumber Int          @map("ticket_number")
+  status       TicketStatus @default(WAITING)
+  /// Cached position among WAITING tickets. Treated as a cache: the source of
+  /// truth is the ordered set of WAITING tickets, and this value is recomputed
+  /// on every queue mutation.
+  position     Int?
+  joinedAt     DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  calledAt     DateTime?    @map("called_at") @db.Timestamptz(6)
+  servingAt    DateTime?    @map("serving_at") @db.Timestamptz(6)
+  completedAt  DateTime?    @map("completed_at") @db.Timestamptz(6)
+  cancelledAt  DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  queue          Queue          @relation("QueueTickets", fields: [queueId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentInQueue Queue?         @relation("QueueCurrentTicket")
+  notifications  Notification[]
+
+  @@unique([queueId, ticketNumber])
+  // Primary hot path: "next waiting ticket in this queue, FIFO".
+  @@index([queueId, status, joinedAt])
+  // Client dashboard: "my active tickets".
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@map("tickets")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications & audit
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(160)
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  ticketId  String?          @map("ticket_id") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+/// Fixed-window rate-limit counters.
+///
+/// Stored in PostgreSQL (not in process memory) so the limits hold across
+/// instances and restarts, and so they can be reasoned about alongside the rest
+/// of the data. Rows expire and are pruned opportunistically.
+model RateLimitCounter {
+  key         String   @db.VarChar(255)
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  count       Int      @default(0)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}
+
+/// Append-only record of administrative and operationally significant actions.
+/// `metadata` must never contain secrets or plaintext passwords.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(120)
+  entityType  String?  @map("entity_type") @db.VarChar(80)
+  entityId    String?  @map("entity_id") @db.VarChar(80)
+  description String?  @db.VarChar(500)
+  metadata    Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(64)
+  userAgent   String?  @map("user_agent") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Billing (B2B, billed per organization)
+// ---------------------------------------------------------------------------
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  /// Bank transfer / invoice: a real reference is issued and the finance system
+  /// (or the bank aggregator) confirms it through the signed webhook.
+  INVOICE
+  STRIPE
+}
+
+/// Product catalogue. Prices are stored in the smallest currency unit.
+model Plan {
+  id                 String          @id @default(uuid()) @db.Uuid
+  code               String          @unique @db.VarChar(60)
+  name               String          @db.VarChar(120)
+  description        String?         @db.Text
+  priceCents         Int             @map("price_cents")
+  currency           String          @default("AOA") @db.VarChar(3)
+  interval           BillingInterval @default(MONTHLY)
+  maxBranches        Int             @map("max_branches")
+  maxQueuesPerBranch Int             @map("max_queues_per_branch")
+  maxStaff           Int             @map("max_staff")
+  active             Boolean         @default(true)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscriptions Subscription[]
+  transactions  Transaction[]
+
+  @@index([active])
+  @@map("plans")
+}
+
+/// One subscription per organization (B2B).
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  organizationId     String             @unique @map("organization_id") @db.Uuid
+  planId             String             @map("plan_id") @db.Uuid
+  status             SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime           @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  startedAt          DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  cancelledAt        DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan          @relation(fields: [planId], references: [id])
+  transactions Transaction[]
+
+  @@index([status, currentPeriodEnd])
+  @@index([planId])
+  @@map("subscriptions")
+}
+
+/// Immutable record of a billing attempt. Never deleted, never faked: a
+/// transaction only becomes SUCCEEDED through the signature-verified webhook.
+model Transaction {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  subscriptionId    String?           @map("subscription_id") @db.Uuid
+  planId            String            @map("plan_id") @db.Uuid
+  provider          PaymentProvider   @default(INVOICE)
+  status            TransactionStatus @default(PENDING)
+  amountCents       Int               @map("amount_cents")
+  currency          String            @db.VarChar(3)
+  /// Human-facing reference the payer quotes (also the idempotency key).
+  reference         String            @unique @db.VarChar(64)
+  providerReference String?           @map("provider_reference") @db.VarChar(200)
+  /// Webhook event id; unique so a replayed webhook can never double-apply.
+  providerEventId   String?           @unique @map("provider_event_id") @db.VarChar(200)
+  paidAt            DateTime?         @map("paid_at") @db.Timestamptz(6)
+  failureReason     String?           @map("failure_reason") @db.VarChar(300)
+  metadata          Json?
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  plan         Plan          @relation(fields: [planId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+  @@index([planId])
+  @@map("transactions")
+}

@@ -26,10 +26,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    # Not published by default: only the app needs to reach it. Uncomment to
-    # inspect with a local client.
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "5432:5432"
 
   migrate:
     build:

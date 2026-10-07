@@ -288,6 +288,28 @@ marca uma transação como paga**.
   atómico `billing_counters`; `receipt.service.ts` envia o recibo depois do
   commit (idempotente via `receipt_sent_at`).
 
+## 8.7 Notificações SMS e WhatsApp (Fase 4 · Bloco 3)
+
+A entrega fora da app é modelada como um **outbox**, para que um SMS/WhatsApp
+nunca anuncie um evento que não foi confirmado na base de dados.
+
+- `notification-messages.ts` (puro): normalização de telefone para E.164
+  (predefinição `+244`), seleção de canais por consentimento, corpo da mensagem
+  por canal e os pedidos HTTP exatos de cada provedor. Sem I/O — testável.
+- `createNotification` escreve a notificação **e** as linhas de entrega
+  `PENDING` na mesma transação. Só os eventos que interessam a quem não está a
+  olhar para o ecrã saem por canal externo (`QUEUE_JOINED`, `CUSTOMER_CALLED`,
+  `SERVICE_COMPLETED`, `TICKET_CANCELLED`); `POSITION_CHANGED` fica só na app.
+- `notification-dispatch.service.ts` reclama linhas com
+  `FOR UPDATE SKIP LOCKED` (seguro com várias instâncias) e envia por
+  `whatsapp.provider.ts` (Meta Cloud API) ou `sms.provider.ts` (gateway HTTP
+  genérico). O drain corre após o commit, em fire-and-forget.
+- Idempotência garantida pelo índice único `(notification_id, channel)`; falhas
+  são tentadas até 3 vezes e um canal sem provedor configurado fica `SKIPPED`,
+  nunca "enviado".
+- Consentimento explícito: `User.smsOptIn`/`User.whatsappOptIn` começam a
+  `false` e só o cliente os liga em `/conta`.
+
 ## 9. Ambientes e deploy
 
 - Configuração exclusivamente por variáveis de ambiente, validadas por zod

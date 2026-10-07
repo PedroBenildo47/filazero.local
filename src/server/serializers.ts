@@ -51,6 +51,7 @@ export function publicOrganization(
     country: organization.country,
     phone: organization.phone,
     email: organization.email,
+    taxId: organization.taxId,
     status: organization.status,
     createdAt: organization.createdAt,
     updatedAt: organization.updatedAt,

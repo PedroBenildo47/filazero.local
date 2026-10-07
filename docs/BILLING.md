@@ -127,3 +127,61 @@ a distribuição de subscrições por estado.
 - A eliminação permanente de uma organização é **bloqueada** quando existe
   qualquer transação `SUCCEEDED` (`409 CONFLICT`), protegendo o histórico
   financeiro; nesses casos a ação disponível é suspender.
+
+## 8. Pagamentos e subscrições B2B (Fase 3)
+
+O checkout passa a ser **inteligente**: o gestor escolhe o método e o sistema
+gera o caminho correto, sempre com a mesma regra de ouro — só o webhook assinado
+marca a transação como paga.
+
+### 8.1 Métodos (`PaymentMethod`)
+
+| Método | Transporte | Como liquida |
+| --- | --- | --- |
+| `MULTICAIXA_EXPRESS` | `INVOICE` | Referência + instruções passo-a-passo. Com `MULTICAIXA_API_URL`/`MULTICAIXA_API_KEY` é feito um pedido real ao gateway (EMIS/agregador) e devolvido o link de pagamento |
+| `BANK_TRANSFER` | `INVOICE` | Referência + dados bancários (`BILLING_BANK_*`) para transferência |
+| `CARD` | `STRIPE` | Checkout Session hospedada (Visa/Mastercard). Sem `STRIPE_SECRET_KEY` devolve **503** em vez de fingir uma página |
+
+O `provider` guarda o **transporte** (`INVOICE`/`STRIPE`) e o `method` o método
+escolhido pelo cliente; a verificação de assinatura é única para os dois.
+
+### 8.2 Comprovativo de pagamento
+
+`POST /api/organizations/{id}/transactions/{id}/proof` (`multipart/form-data`,
+campo `file`, ≤ 5 MB). O tipo real é detectado pelos **bytes** (PDF, JPEG, PNG,
+WebP) — a extensão declarada não é de confiança. O ficheiro é guardado na tabela
+`payment_proofs` com hash SHA-256 e a transação passa `PENDING → UNDER_REVIEW`.
+
+Subir um comprovativo **nunca** marca a transação como paga: é apenas a prova
+para a equipa financeira. Só o webhook assinado pode passar a `SUCCEEDED`
+(o claim condicional aceita `PENDING` e `UNDER_REVIEW`).
+
+### 8.3 Fatura e recibo automático
+
+- Ao passar a `SUCCEEDED`, é atribuído um número **sequencial** por ano
+  (`FT/2026/000123`), a partir do contador atómico `billing_counters` — só
+  pagamentos reais consomem números, pelo que não há lacunas.
+- O **recibo** é enviado automaticamente por email para o email da organização
+  (ou, na sua falta, para o primeiro gestor). O envio acontece **depois** de o
+  pagamento estar comprometido (SMTP nunca faz rollback de dinheiro) e é
+  idempotente via `receipt_sent_at`.
+- `GET /api/organizations/{id}/invoices` lista o histórico de faturas pagas e
+  `GET .../invoices/{transactionId}` devolve a fatura detalhada para impressão.
+
+### 8.4 Migração e testes
+
+Migração `0007_b2b_payments`: `PaymentMethod`, valor `UNDER_REVIEW` em
+`TransactionStatus`, colunas `method`/`invoice_number`/`proof_submitted_at`/
+`receipt_sent_at`, e as tabelas `payment_proofs` e `billing_counters`.
+
+A suite `tests/api/b2b-payments.spec.ts` exercita os três métodos, o upload e
+download do comprovativo, a rejeição de ficheiros falsos, a confirmação de uma
+transação em `UNDER_REVIEW` pelo webhook, o número de fatura sequencial, o
+histórico e o **recibo entregue por SMTP real**. O `payment-methods.test.ts`
+cobre as regras puras (métodos, numeração, detecção de tipo e template do
+recibo em PT/EN).
+
+**Limitação honesta:** tal como o adaptador Stripe, o adaptador Multicaixa
+Express (chamada REST real) **não foi exercitado** neste sandbox por não existir
+credencial de PSP. O caminho por referência + webhook é integralmente funcional e
+testado.

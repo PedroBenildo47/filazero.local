@@ -111,6 +111,7 @@ model User {
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
   auditLogs           AuditLog[]           @relation("AuditActor")
+  paymentProofs       PaymentProof[]
 
   @@index([role, status])
   @@map("users")
@@ -387,9 +388,20 @@ enum SubscriptionStatus {
 
 enum TransactionStatus {
   PENDING
+  /// A payment proof was uploaded and is awaiting finance confirmation. Only a
+  /// signature-verified webhook can still move it to SUCCEEDED.
+  UNDER_REVIEW
   SUCCEEDED
   FAILED
   REFUNDED
+}
+
+/// Customer-facing payment method. `PaymentProvider` stays the transport used to
+/// obtain the money (INVOICE = reference confirmed by webhook, STRIPE = card).
+enum PaymentMethod {
+  MULTICAIXA_EXPRESS
+  BANK_TRANSFER
+  CARD
 }
 
 enum PaymentProvider {
@@ -453,11 +465,18 @@ model Transaction {
   subscriptionId    String?           @map("subscription_id") @db.Uuid
   planId            String            @map("plan_id") @db.Uuid
   provider          PaymentProvider   @default(INVOICE)
+  method            PaymentMethod     @default(BANK_TRANSFER)
   status            TransactionStatus @default(PENDING)
   amountCents       Int               @map("amount_cents")
   currency          String            @db.VarChar(3)
   /// Human-facing reference the payer quotes (also the idempotency key).
   reference         String            @unique @db.VarChar(64)
+  /// Sequential invoice number, assigned only when a payment really succeeds.
+  invoiceNumber     String?           @unique @map("invoice_number") @db.VarChar(40)
+  /// Set when a bank-transfer/Multicaixa proof is uploaded.
+  proofSubmittedAt  DateTime?         @map("proof_submitted_at") @db.Timestamptz(6)
+  /// Set once the automatic payment receipt email has been handed to SMTP.
+  receiptSentAt     DateTime?         @map("receipt_sent_at") @db.Timestamptz(6)
   providerReference String?           @map("provider_reference") @db.VarChar(200)
   /// Webhook event id; unique so a replayed webhook can never double-apply.
   providerEventId   String?           @unique @map("provider_event_id") @db.VarChar(200)
@@ -470,10 +489,41 @@ model Transaction {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   plan         Plan          @relation(fields: [planId], references: [id])
+  proofs       PaymentProof[]
 
   @@index([organizationId, status])
   @@index([status, createdAt])
   @@index([status, paidAt])
   @@index([planId])
   @@map("transactions")
+}
+
+/// Proof of payment (bank transfer / Multicaixa Express) uploaded by the payer.
+/// Stored in the database like the registration documents, with a content hash.
+model PaymentProof {
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String   @map("transaction_id") @db.Uuid
+  uploadedById  String?  @map("uploaded_by_id") @db.Uuid
+  fileName      String   @map("file_name") @db.VarChar(255)
+  mimeType      String   @map("mime_type") @db.VarChar(100)
+  sizeBytes     Int      @map("size_bytes")
+  sha256        String   @db.Char(64)
+  content       Bytes    @db.ByteA
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  uploadedBy  User?       @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([transactionId, createdAt])
+  @@map("payment_proofs")
+}
+
+/// Atomic per-period counters (e.g. yearly invoice sequence).
+model BillingCounter {
+  scope  String @db.VarChar(40)
+  period String @db.VarChar(10)
+  value  Int    @default(0)
+
+  @@id([scope, period])
+  @@map("billing_counters")
 }

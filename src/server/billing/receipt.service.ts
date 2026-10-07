@@ -10,6 +10,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { sendPaymentReceiptEmail } from "@/server/email/email.service";
+import { renderInvoicePdfById } from "./invoice.service";
 
 /** Best-effort billing contact: the organization email, else its first manager. */
 async function billingRecipient(
@@ -57,6 +58,10 @@ export async function deliverPaymentReceipt(transactionId: string): Promise<bool
     return false;
   }
 
+  // Attach the fiscal invoice PDF. A rendering failure must never block the
+  // receipt: the email still goes out, just without the attachment.
+  const pdf = await renderInvoicePdfById(transactionId).catch(() => null);
+
   const sent = await sendPaymentReceiptEmail({
     to,
     organizationName: transaction.organization.name,
@@ -69,6 +74,9 @@ export async function deliverPaymentReceipt(transactionId: string): Promise<bool
     paidAt: transaction.paidAt ?? new Date(),
     periodEnd: transaction.subscription?.currentPeriodEnd ?? null,
     lang: "pt",
+    attachments: pdf
+      ? [{ filename: pdf.fileName, content: pdf.bytes, contentType: "application/pdf" }]
+      : undefined,
   });
 
   if (sent) {

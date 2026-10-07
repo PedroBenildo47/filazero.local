@@ -285,6 +285,8 @@ model Queue {
   ticketSequence  Int         @default(0) @map("ticket_sequence")
   /// Ticket currently being handled. Maintained by the queue engine.
   currentTicketId String?     @unique @map("current_ticket_id") @db.Uuid
+  /// Whether this queue accepts anonymous walk-in tickets from a kiosk/totem.
+  kioskEnabled    Boolean     @default(false) @map("kiosk_enabled")
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -302,7 +304,11 @@ model Queue {
 model Ticket {
   id           String       @id @default(uuid()) @db.Uuid
   queueId      String       @map("queue_id") @db.Uuid
-  userId       String       @map("user_id") @db.Uuid
+  /// Null for kiosk/totem walk-ins that never created an account.
+  userId       String?      @map("user_id") @db.Uuid
+  /// Optional walk-in identity captured at the kiosk.
+  guestName    String?      @map("guest_name") @db.VarChar(120)
+  guestPhone   String?      @map("guest_phone") @db.VarChar(32)
   /// Sequential per queue (1, 2, 3, ...). Generated inside a transaction.
   ticketNumber Int          @map("ticket_number")
   status       TicketStatus @default(WAITING)
@@ -319,7 +325,7 @@ model Ticket {
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   queue          Queue          @relation("QueueTickets", fields: [queueId], references: [id], onDelete: Cascade)
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   currentInQueue Queue?         @relation("QueueCurrentTicket")
   notifications  Notification[]
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeCanvas } from "qrcode.react";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
@@ -41,6 +41,7 @@ interface Branch {
 }
 interface QueueItem {
   id: string;
+  publicCode: string;
   name: string;
   description: string | null;
   status: string;
@@ -118,7 +119,9 @@ function ManagerDashboard() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
-  const [queueQr, setQueueQr] = useState<{ name: string; url: string } | null>(null);
+  const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
+    null,
+  );
 
   const [orgForm, setOrgForm] = useState({ name: "", category: "", city: "" });
   const [branchForm, setBranchForm] = useState({ name: "", address: "", city: "" });
@@ -249,16 +252,22 @@ function ManagerDashboard() {
   }
 
   function downloadQueueQr() {
-    const svg = document.getElementById("queue-qr-code");
-    if (!svg || !queueQr) return;
-    const file = new Blob([new XMLSerializer().serializeToString(svg)], {
-      type: "image/svg+xml;charset=utf-8",
-    });
+    const canvas = document.getElementById("queue-qr-code") as HTMLCanvasElement | null;
+    if (!canvas || !queueQr) return;
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(file);
-    link.download = `filazero-${queueQr.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`;
+    link.href = canvas.toDataURL("image/png");
+    link.download = `filazero-${queueQr.code}.png`;
     link.click();
-    URL.revokeObjectURL(link.href);
+  }
+
+  async function copyQueueLink() {
+    if (!queueQr) return;
+    try {
+      await navigator.clipboard.writeText(queueQr.url);
+      setNotice(t("manager.linkCopied"));
+    } catch {
+      setNotice(queueQr.url);
+    }
   }
 
   if (loading) {
@@ -633,7 +642,8 @@ function ManagerDashboard() {
                             onClick={() =>
                               setQueueQr({
                                 name: queue.name,
-                                url: `${window.location.origin}/fila/${queue.id}`,
+                                code: queue.publicCode,
+                                url: `${window.location.origin}/fila/${queue.publicCode}`,
                               })
                             }
                           >
@@ -730,11 +740,17 @@ function ManagerDashboard() {
               >
                 <h2 id="queue-qr-title">{queueQr.name}</h2>
                 <p className="muted">{t("manager.qrDescription")}</p>
-                <QRCodeSVG id="queue-qr-code" value={queueQr.url} size={256} level="H" />
+                <QRCodeCanvas id="queue-qr-code" value={queueQr.url} size={256} level="H" />
+                <p className="mono qr-code-value">
+                  {t("manager.queueCode")}: <strong>{queueQr.code}</strong>
+                </p>
                 <p className="mono qr-url">{queueQr.url}</p>
                 <div className="row qr-actions">
                   <button type="button" className="btn btn-primary" onClick={downloadQueueQr}>
-                    {t("manager.downloadQr")}
+                    {t("manager.downloadPng")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => void copyQueueLink()}>
+                    {t("manager.copyLink")}
                   </button>
                   <button type="button" className="btn btn-ghost" onClick={() => window.print()}>
                     {t("manager.printQr")}

@@ -6,11 +6,12 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { useQueueStream } from "@/components/useQueueStream";
 import { useSession } from "@/components/SessionProvider";
-import { Alert, Badge, Spinner } from "@/components/ui";
+import { Alert, Badge, Spinner, StatCard } from "@/components/ui";
 import { queueStatusKey, statusTone } from "@/lib/ui";
 
 interface QueueInfo {
   id: string;
+  publicCode: string;
   name: string;
   description: string | null;
   status: string;
@@ -19,12 +20,21 @@ interface QueueInfo {
   organization: { id: string; name: string; category: string | null };
 }
 
+interface ActiveTicket {
+  ticket: { id: string; queueId: string; ticketNumber: number; status: string; position: number | null };
+  waitingCount: number;
+}
+interface MyTickets {
+  active: ActiveTicket | null;
+}
+
 export function QueueView({ queueId }: { queueId: string }) {
   const { t, tError } = useI18n();
   const { user } = useSession();
   const router = useRouter();
 
   const [queue, setQueue] = useState<QueueInfo | null>(null);
+  const [activeTicket, setActiveTicket] = useState<ActiveTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -41,20 +51,37 @@ export function QueueView({ queueId }: { queueId: string }) {
     }
   }, [queueId, tError]);
 
+  const loadMine = useCallback(async () => {
+    if (!user) {
+      setActiveTicket(null);
+      return;
+    }
+    try {
+      const mine = await api<MyTickets>("/api/tickets/me");
+      setActiveTicket(mine.active);
+    } catch {
+      // The customer ticket endpoint is not available to every role.
+      setActiveTicket(null);
+    }
+  }, [user]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadMine();
+  }, [load, loadMine]);
 
-  // Live waiting count: the event is only a signal, we re-read the queue.
-  const streamStatus = useQueueStream(queueId, () => {
+  // Live updates: re-read the authoritative queue and the user's own ticket.
+  const streamStatus = useQueueStream(queue?.id ?? null, () => {
     void load();
+    void loadMine();
   });
 
   async function join() {
+    if (!queue) return;
     setJoining(true);
     setJoinError(null);
     try {
-      await api(`/api/queues/${queueId}/tickets`, { method: "POST" });
+      await api(`/api/queues/${queue.id}/tickets`, { method: "POST" });
       router.push("/conta");
       router.refresh();
     } catch (caught) {
@@ -86,6 +113,7 @@ export function QueueView({ queueId }: { queueId: string }) {
   }
 
   const isOpen = queue.status === "OPEN";
+  const mine = activeTicket && activeTicket.ticket.queueId === queue.id ? activeTicket : null;
 
   return (
     <main className="container form-narrow animate-in">
@@ -99,6 +127,9 @@ export function QueueView({ queueId }: { queueId: string }) {
       <p className="muted">
         {t("queue.organization")}: {queue.organization.name} · {t("queue.branch")}:{" "}
         {queue.branch.name}
+      </p>
+      <p className="muted mono">
+        {t("manager.queueCode")}: <strong>{queue.publicCode}</strong>
       </p>
 
       <div className="stat-row">
@@ -123,7 +154,26 @@ export function QueueView({ queueId }: { queueId: string }) {
       {queue.description && <p>{queue.description}</p>}
       {joinError && <Alert kind="error">{joinError}</Alert>}
 
-      {user ? (
+      {mine && mine.ticket.status === "WAITING" ? (
+        <div className="stack">
+          <Alert kind="success">{t("queue.yourTicket")}</Alert>
+          <div className="kpi-grid">
+            <StatCard
+              label={t("queue.yourTicket")}
+              value={`#${mine.ticket.ticketNumber}`}
+              tone="ok"
+            />
+            <StatCard
+              label={t("queue.positionNow")}
+              value={mine.ticket.position ?? "—"}
+              tone="info"
+            />
+          </div>
+          <Link href="/conta" className="btn btn-primary btn-lg btn-block">
+            {t("queue.viewTicket")}
+          </Link>
+        </div>
+      ) : user ? (
         <button
           type="button"
           className="btn btn-primary btn-lg btn-block"

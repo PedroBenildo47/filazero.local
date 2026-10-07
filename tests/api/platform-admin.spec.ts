@@ -47,6 +47,7 @@ export async function runPlatformAdminSuite(options: {
       data: {
         organizationId: organizationAId,
         branchId: branch.id,
+        publicCode: `P${Math.random().toString(36).slice(2, 9)}`.toUpperCase(),
         name: `Panel Queue ${Date.now()}`,
         status: "OPEN",
       },

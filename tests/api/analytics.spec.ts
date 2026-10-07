@@ -76,6 +76,7 @@ export async function runAnalyticsSuite(options: {
         data: {
           organizationId: organizationAId,
           branchId: branchA.id,
+          publicCode: `A${Math.random().toString(36).slice(2, 9)}`.toUpperCase(),
           name: `Analytics Queue A ${Date.now()}`,
           status: "OPEN",
         },
@@ -84,6 +85,7 @@ export async function runAnalyticsSuite(options: {
         data: {
           organizationId: organizationAId,
           branchId: branchB.id,
+          publicCode: `B${Math.random().toString(36).slice(2, 9)}`.toUpperCase(),
           name: `Analytics Queue B ${Date.now()}`,
           status: "OPEN",
         },

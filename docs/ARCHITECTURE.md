@@ -149,13 +149,13 @@ Não importa serviços nem Prisma — toda a leitura de dados passa por `/api/*`
 | --- | --- |
 | `/` (landing) | estática; liga a pesquisa/registo/login |
 | `/registar`, `/login` | `POST /api/auth/register`, `POST /api/auth/login` |
-| `/pesquisar` | `GET /api/public/organizations` |
+| `/pesquisar` | entrada dupla: QR (câmara) / código-link + `GET /api/public/organizations` |
 | `/estabelecimento/[id]` | `GET /api/public/organizations/{id}` |
-| `/fila/[id]` | `GET /api/queues/{id}` + SSE + `POST /api/queues/{id}/tickets` |
+| `/fila/[id]` | `GET /api/queues/{id|code}` + SSE + `POST /api/queues/{id}/tickets` |
 | `/conta` (cliente) | `GET /api/tickets/me`, `/api/notifications`, SSE, `POST .../leave` |
 | `/staff` | `GET /api/queues/{id}/state` + SSE + `call-next`/`serve`/`complete`/`no-show`/`cancel` |
 | `/gestor` | organizações, filiais, filas, filiações |
-| `/admin` | `GET/POST /api/organizations`, `PATCH .../status` |
+| `/admin` | superfície de plataforma `/api/admin/*` (financeiro, organizações, auditoria) |
 
 Decisões:
 
@@ -250,6 +250,20 @@ e nunca reutiliza `assertOrganizationAccess` (que bloqueia o admin de propósito
 Regras de segurança: eliminar exige o nome exato e é bloqueado quando existem
 transações pagas; as rotas tenant permanecem `403` para o `ADMINISTRATOR` (coberto
 pelo teste `tests/api/platform-security.spec.ts` e `tests/api/platform-admin.spec.ts`).
+
+## 8.5 QR Codes e entrada do cliente (Fase 2 do roadmap)
+
+Cada fila tem um `publicCode` curto e único (módulo puro
+`src/server/queues/queue-code.ts`). `GET /api/queues/{ref}` aceita UUID **ou**
+código, pelo que um único endpoint serve o QR, o link direto e a entrada manual.
+
+- O painel `/gestor` gera o QR a apontar para `/fila/{publicCode}` (copiar link
+  e descarregar PNG incluídos).
+- A página `/pesquisar` oferece as duas vias: leitura de QR pela câmara
+  (`BarcodeDetector`, sem dependências, com degradação graciosa) ou código/link,
+  e a pesquisa manual na lista pública.
+- `/fila/[queueId]` resolve o código e mostra a senha/posição em tempo real via
+  SSE quando o cliente já está na fila.
 
 ## 9. Ambientes e deploy
 

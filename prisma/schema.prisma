@@ -252,6 +252,8 @@ model Queue {
   id              String      @id @default(uuid()) @db.Uuid
   organizationId  String      @map("organization_id") @db.Uuid
   branchId        String      @map("branch_id") @db.Uuid
+  /// Short, human-typable public code (QR / manual entry). Unique per queue.
+  publicCode      String      @unique @map("public_code") @db.VarChar(12)
   name            String      @db.VarChar(160)
   description     String?     @db.Text
   status          QueueStatus @default(CLOSED)

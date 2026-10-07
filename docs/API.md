@@ -71,6 +71,7 @@ inclui `resetToken` (não há provedor de email configurado — ver
 | DELETE | `/api/organizations/{id}/members/{memberId}` | `member:manage` |
 | GET | `/api/organizations/{id}/users?q=` | `member:manage` |
 | GET | `/api/organizations/{id}/analytics` | gestor com vínculo ativo na organização |
+| GET | `/api/organizations/{id}/analytics/export?format=csv\|pdf` | gestor com vínculo ativo na organização |
 | GET | `/api/admin/metrics` | `platform:admin` (apenas agregados globais) |
 | GET | `/api/public/organizations?q=&city=&page=` | público |
 | GET | `/api/public/organizations/{id}` | público |
@@ -156,6 +157,21 @@ máximo é 366 dias. O fuso horário IANA predefinido é `Africa/Luanda`.
     Médias sem amostras são `null`.
 - `completedByHour` contém os 24 horários locais e conta conclusões por
     `completedAt`.
+- `branchPerformance` agrega os mesmos tempos por filial; `statusDistribution`
+    conta as senhas emitidas no período pelo estado atual, e é a base das taxas
+    `completionRateBps`, `cancellationRateBps` e `noShowRateBps` (em pontos base).
+- `totals.averageWaitSeconds`/`averageServiceSeconds` são médias globais do
+    período; `peak` indica o dia e a hora de maior volume.
+
+`GET /api/organizations/{id}/analytics/export?format=csv|pdf` gera o relatório
+**no servidor** a partir exatamente dos mesmos dados (`getOrganizationAnalytics`),
+pelo que o ficheiro nunca diverge do que o gestor vê no ecrã. `format=csv`
+devolve `text/csv; charset=utf-8` (BOM UTF-8, CRLF, aspas escapadas e
+neutralização de fórmulas de folha de cálculo); `format=pdf` devolve um PDF A4
+real com `pdf-lib` (cabeçalho, KPIs, tabelas de filiais/filas/estados e gráfico
+horário). Ambos os formatos respeitam o escopo de filial e o isolamento por
+inquilino do endpoint JSON, aceitam `lang=pt|en` (predefinido `pt`) e são
+entregues como `Content-Disposition: attachment`.
 
 A API permite apenas utilizadores com papel global `MANAGER` e vínculo ativo
 `MANAGER` nessa organização. O escopo de filial é derivado dos vínculos: um

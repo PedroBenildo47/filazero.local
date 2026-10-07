@@ -18,6 +18,7 @@ import {
   billingIntervalKey,
   formatMoney,
   memberStatusKey,
+  paymentMethodKey,
   queueStatusKey,
   roleKey,
   statusTone,
@@ -90,15 +91,36 @@ interface Transaction {
   currency: string;
   reference: string;
   provider: string;
+  method: string;
+  invoiceNumber: string | null;
   paidAt: string | null;
+  proofSubmittedAt: string | null;
+  receiptSentAt: string | null;
   createdAt: string;
   failureReason: string | null;
 }
+interface Invoice {
+  id: string;
+  invoiceNumber: string | null;
+  reference: string;
+  amountCents: number;
+  currency: string;
+  method: string;
+  status: string;
+  paidAt: string | null;
+  plan: { code: string; name: string };
+  periodStart: string | null;
+  periodEnd: string | null;
+}
 interface CheckoutResult {
   reference: string;
+  method: string;
   checkoutUrl: string | null;
   instructions: string | null;
 }
+
+const PAYMENT_METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "CARD"] as const;
+type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 function ManagerDashboard() {
   const { t, tError } = useI18n();
@@ -118,7 +140,10 @@ function ManagerDashboard() {
   const [billing, setBilling] = useState<BillingOverview | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
+  const [method, setMethod] = useState<PaymentMethod>("MULTICAIXA_EXPRESS");
+  const [proofBusyId, setProofBusyId] = useState<string | null>(null);
   const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
     null,
   );
@@ -157,7 +182,7 @@ function ManagerDashboard() {
     async (id: string) => {
       if (!id) return;
       try {
-        const [branchList, memberList, billingData, planList, transactionList] =
+        const [branchList, memberList, billingData, planList, transactionList, invoiceList] =
           await Promise.all([
             api<{ items: Branch[] }>(`/api/organizations/${id}/branches?pageSize=50`),
             api<{ items: Member[] }>(`/api/organizations/${id}/members?pageSize=50`),
@@ -166,12 +191,14 @@ function ManagerDashboard() {
             api<{ items: Transaction[] }>(
               `/api/organizations/${id}/transactions?pageSize=20`,
             ),
+            api<{ items: Invoice[] }>(`/api/organizations/${id}/invoices?pageSize=20`),
           ]);
         setBranches(branchList.items);
         setMembers(memberList.items);
         setBilling(billingData);
         setPlans(planList.items);
         setTransactions(transactionList.items);
+        setInvoices(invoiceList.items);
         setBranchId((current) =>
           branchList.items.some((branch) => branch.id === current)
             ? current
@@ -191,7 +218,7 @@ function ManagerDashboard() {
     try {
       const result = await api<CheckoutResult>("/api/billing/checkout", {
         method: "POST",
-        json: { organizationId, planId },
+        json: { organizationId, planId, method },
       });
       setCheckout(result);
       if (result.checkoutUrl) window.open(result.checkoutUrl, "_blank", "noopener");
@@ -200,6 +227,66 @@ function ManagerDashboard() {
       setError(tError(caught));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function submitProof(transactionId: string, file: File) {
+    setProofBusyId(transactionId);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch(
+        `/api/organizations/${organizationId}/transactions/${transactionId}/proof`,
+        { method: "POST", body, credentials: "include" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: { message?: string } }
+        | null;
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? t("errors.NETWORK"));
+      }
+      setNotice(t("billing.proofSent"));
+      await loadOrganization(organizationId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("errors.NETWORK"));
+    } finally {
+      setProofBusyId(null);
+    }
+  }
+
+  async function printInvoice(transactionId: string) {
+    try {
+      const invoice = await api<Invoice & {
+        organization: { name: string; email: string | null; city: string | null };
+      }>(`/api/organizations/${organizationId}/invoices/${transactionId}`);
+      const win = window.open("", "_blank", "width=800,height=900");
+      if (!win) return;
+      const esc = (value: string) =>
+        value.replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+        );
+      win.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8" />
+        <title>${esc(invoice.invoiceNumber ?? invoice.reference)}</title>
+        <style>body{font-family:system-ui,sans-serif;padding:40px;color:#0f172a}h1{font-size:22px}table{border-collapse:collapse;margin-top:24px;width:100%}td{padding:8px 0;border-bottom:1px solid #e2e8f0}td:last-child{text-align:right;font-weight:600}.muted{color:#64748b;font-size:13px}</style>
+        </head><body>
+        <h1>FilaZero</h1>
+        <p class="muted">Fatura ${esc(invoice.invoiceNumber ?? "—")}</p>
+        <p><strong>${esc(invoice.organization.name)}</strong><br />${esc(invoice.organization.city ?? "")}</p>
+        <table>
+          <tr><td>Plano</td><td>${esc(invoice.plan.name)}</td></tr>
+          <tr><td>Valor</td><td>${esc(formatMoney(invoice.amountCents, invoice.currency))}</td></tr>
+          <tr><td>Método</td><td>${esc(t(paymentMethodKey(invoice.method)))}</td></tr>
+          <tr><td>Referência</td><td>${esc(invoice.reference)}</td></tr>
+          <tr><td>Pago em</td><td>${esc(invoice.paidAt ? new Date(invoice.paidAt).toLocaleDateString() : "—")}</td></tr>
+          <tr><td>Válida até</td><td>${esc(invoice.periodEnd ? new Date(invoice.periodEnd).toLocaleDateString() : "—")}</td></tr>
+        </table>
+        <p class="muted" style="margin-top:32px">FilaZero — gestão de filas presenciais</p>
+        <script>window.onload=()=>window.print()</script>
+        </body></html>`);
+      win.document.close();
+    } catch (caught) {
+      setError(tError(caught));
     }
   }
 
@@ -421,6 +508,26 @@ function ManagerDashboard() {
                 </div>
 
                 <h3>{t("billing.choosePlan")}</h3>
+                <div className="field">
+                  <span>{t("billing.chooseMethod")}</span>
+                  <div className="row method-picker">
+                    {PAYMENT_METHODS.map((option) => (
+                      <label
+                        key={option}
+                        className={`method-option${method === option ? " is-selected" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment-method"
+                          value={option}
+                          checked={method === option}
+                          onChange={() => setMethod(option)}
+                        />
+                        <span>{t(paymentMethodKey(option))}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <table className="table">
                   <thead>
                     <tr>
@@ -491,34 +598,115 @@ function ManagerDashboard() {
                 {transactions.length === 0 ? (
                   <EmptyState>{t("billing.noTransactions")}</EmptyState>
                 ) : (
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>{t("billing.reference")}</th>
-                        <th>{t("billing.amount")}</th>
-                        <th>{t("billing.status")}</th>
-                        <th>{t("account.joinedDate")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {transactions.map((transaction) => (
-                        <tr key={transaction.id}>
-                          <td className="muted">{transaction.reference}</td>
-                          <td>
-                            {formatMoney(transaction.amountCents, transaction.currency)}
-                          </td>
-                          <td>
-                            <Badge tone={statusTone(transaction.status)}>
-                              {t(transactionStatusKey(transaction.status))}
-                            </Badge>
-                          </td>
-                          <td className="muted">
-                            {new Date(transaction.createdAt).toLocaleDateString()}
-                          </td>
+                  <div className="table-scroll">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>{t("billing.reference")}</th>
+                          <th>{t("billing.method")}</th>
+                          <th>{t("billing.amount")}</th>
+                          <th>{t("billing.status")}</th>
+                          <th>{t("account.joinedDate")}</th>
+                          <th>{t("common.actions")}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {transactions.map((transaction) => {
+                          const canUploadProof =
+                            transaction.method !== "CARD" &&
+                            (transaction.status === "PENDING" ||
+                              transaction.status === "UNDER_REVIEW");
+                          return (
+                            <tr key={transaction.id}>
+                              <td className="muted">{transaction.reference}</td>
+                              <td className="muted">
+                                {t(paymentMethodKey(transaction.method))}
+                              </td>
+                              <td>
+                                {formatMoney(transaction.amountCents, transaction.currency)}
+                              </td>
+                              <td>
+                                <Badge tone={statusTone(transaction.status)}>
+                                  {t(transactionStatusKey(transaction.status))}
+                                </Badge>
+                              </td>
+                              <td className="muted">
+                                {new Date(transaction.createdAt).toLocaleDateString()}
+                              </td>
+                              <td>
+                                {canUploadProof && (
+                                  <label className="btn btn-ghost btn-sm">
+                                    {proofBusyId === transaction.id
+                                      ? t("common.loading")
+                                      : t("billing.proofUpload")}
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                                      hidden
+                                      disabled={proofBusyId === transaction.id}
+                                      onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) void submitProof(transaction.id, file);
+                                        event.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                                {transaction.status !== "PENDING" &&
+                                  transaction.status !== "UNDER_REVIEW" &&
+                                  transaction.proofSubmittedAt && (
+                                    <span className="muted">{t("billing.proofView")}</span>
+                                  )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <h3>{t("billing.invoices")}</h3>
+                <p className="muted">{t("billing.receiptNote")}</p>
+                {invoices.length === 0 ? (
+                  <EmptyState>{t("billing.noInvoices")}</EmptyState>
+                ) : (
+                  <div className="table-scroll">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>{t("billing.invoiceNumber")}</th>
+                          <th>{t("billing.plan")}</th>
+                          <th>{t("billing.amount")}</th>
+                          <th>{t("billing.paidAt")}</th>
+                          <th>{t("common.actions")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoices.map((invoice) => (
+                          <tr key={invoice.id}>
+                            <td className="mono">{invoice.invoiceNumber}</td>
+                            <td>{invoice.plan.name}</td>
+                            <td>{formatMoney(invoice.amountCents, invoice.currency)}</td>
+                            <td className="muted">
+                              {invoice.paidAt
+                                ? new Date(invoice.paidAt).toLocaleDateString()
+                                : "—"}
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => void printInvoice(invoice.id)}
+                              >
+                                {t("billing.viewInvoice")}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </>
             )}

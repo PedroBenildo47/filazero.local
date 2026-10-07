@@ -75,6 +75,16 @@ const envSchema = z.object({
   /** Stripe (only needed when PAYMENT_PROVIDER=stripe). */
   STRIPE_SECRET_KEY: blankToUndefined(z.string().min(10).optional()),
   STRIPE_WEBHOOK_SECRET: blankToUndefined(z.string().min(10).optional()),
+  /**
+   * Multicaixa Express through an EMIS/aggregator gateway. When unset, the
+   * method still issues a real, quotable reference (confirmed by the signed
+   * webhook) and shows the payer the step-by-step instructions.
+   */
+  MULTICAIXA_API_URL: blankToUndefined(z.string().url().optional()),
+  MULTICAIXA_API_KEY: blankToUndefined(z.string().min(10).optional()),
+  /** Merchant phone / name shown in the Multicaixa Express instructions. */
+  MULTICAIXA_MERCHANT_PHONE: blankToUndefined(z.string().max(32).optional()),
+  MULTICAIXA_MERCHANT_NAME: blankToUndefined(z.string().max(160).optional()),
   /** Length of the trial granted when an organization is created. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   /** Plan code attached to a new organization's trial. */

@@ -14,9 +14,16 @@
  */
 import "server-only";
 import { randomBytes } from "node:crypto";
-import type { PaymentProvider as PaymentProviderName, Plan, Transaction } from "@prisma/client";
+import type {
+  PaymentMethod as PaymentMethodName,
+  PaymentProvider as PaymentProviderName,
+  Plan,
+  Transaction,
+} from "@prisma/client";
 import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
+import { createMulticaixaRequest } from "./multicaixa";
+import { providerForMethod } from "./payment-methods";
 
 export interface CheckoutSession {
   provider: PaymentProviderName;
@@ -113,15 +120,33 @@ async function createStripeCheckout(
 export async function createCheckoutSession(
   transaction: Transaction,
   plan: Plan,
+  method: PaymentMethodName,
 ): Promise<CheckoutSession> {
   const env = getEnv();
 
-  if (env.PAYMENT_PROVIDER === "stripe") {
+  if (method === "CARD") {
     return createStripeCheckout(transaction, plan);
   }
 
+  if (method === "MULTICAIXA_EXPRESS") {
+    const result = await createMulticaixaRequest({
+      reference: transaction.reference,
+      amountCents: transaction.amountCents,
+      currency: transaction.currency,
+      description: `Subscrição FilaZero — ${plan.name}`,
+      callbackUrl: `${env.APP_URL}/api/billing/webhook`,
+    });
+    return {
+      provider: providerForMethod(method),
+      providerReference: result.providerReference,
+      checkoutUrl: result.checkoutUrl,
+      instructions: result.instructions,
+    };
+  }
+
+  // Bank transfer: a real, quotable reference plus the bank details.
   return {
-    provider: "INVOICE",
+    provider: providerForMethod(method),
     providerReference: transaction.reference,
     checkoutUrl: buildCheckoutUrl(transaction.reference, plan),
     instructions: bankInstructions(transaction.reference, plan),

@@ -46,6 +46,7 @@ const STATUS_TONES: Record<string, BadgeTone> = {
   PAST_DUE: "warn",
   EXPIRED: "danger",
   PENDING: "warn",
+  UNDER_REVIEW: "info",
   SUCCEEDED: "ok",
   FAILED: "danger",
   REFUNDED: "muted",
@@ -90,6 +91,10 @@ export function transactionStatusKey(status: string): MessageKey {
 
 export function billingIntervalKey(interval: string): MessageKey {
   return `interval.${interval}` as MessageKey;
+}
+
+export function paymentMethodKey(method: string): MessageKey {
+  return `billing.method.${method}` as MessageKey;
 }
 
 /**

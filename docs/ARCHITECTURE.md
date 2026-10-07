@@ -230,9 +230,15 @@ backend.
   alteração de entitlement e não cria transação. A normalização de eventos e a
   aritmética de períodos são funções puras (`billing.rules.ts`); a verificação de
   assinatura (`signature.ts`) é compatível com o esquema do Stripe.
+- **Pagamentos B2B (Fase 3)**: `payment-methods.ts` (métodos + numeração + 
+  validação de comprovativos, puro), `multicaixa.ts` (adaptador Multicaixa
+  Express), `proof.service.ts` (comprovativo `PENDING → UNDER_REVIEW`),
+  `invoice-number.ts` (contador atómico por ano) e `receipt.service.ts` (recibo
+  automático pós-pagamento).
 - **Email** (`src/server/email/`): SMTP configurável por ambiente, templates
-  PT/EN puros (`templates.ts`) e um serviço que nunca propaga falhas de entrega ao
-  cliente (evitando sondar endereços).
+  PT/EN puros (`templates.ts` — recuperação de senha **e** recibo de pagamento) e
+  um serviço que nunca propaga falhas de entrega ao cliente (evitando sondar
+  endereços).
 - Detalhe em [BILLING.md](./BILLING.md).
 
 ## 8.4 Painel de plataforma / Super Admin (Fase 1 do roadmap)
@@ -264,6 +270,23 @@ código, pelo que um único endpoint serve o QR, o link direto e a entrada manua
   e a pesquisa manual na lista pública.
 - `/fila/[queueId]` resolve o código e mostra a senha/posição em tempo real via
   SSE quando o cliente já está na fila.
+
+## 8.6 Pagamentos e subscrições B2B (Fase 3 do roadmap)
+
+O checkout escolhe o método e mantém a regra de ouro: **só o webhook assinado
+marca uma transação como paga**.
+
+- `payment-methods.ts` (puro): os três métodos, o transporte de cada um
+  (`INVOICE`/`STRIPE`), a numeração de fatura e a detecção do tipo real do
+  comprovativo pelos bytes.
+- `MULTICAIXA_EXPRESS` usa `multicaixa.ts` (pedido REST real ao gateway quando
+  `MULTICAIXA_API_URL` está definido; caso contrário, referência + instruções).
+- O comprovativo (`proof.service.ts`) move `PENDING → UNDER_REVIEW`; o claim do
+  webhook aceita ambos os estados, pelo que a confirmação continua a ser o único
+  caminho para `SUCCEEDED`.
+- `invoice-number.ts` gera números sequenciais por ano a partir do contador
+  atómico `billing_counters`; `receipt.service.ts` envia o recibo depois do
+  commit (idempotente via `receipt_sent_at`).
 
 ## 9. Ambientes e deploy
 

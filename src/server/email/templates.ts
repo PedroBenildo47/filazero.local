@@ -57,6 +57,110 @@ const COPY = {
   },
 } as const;
 
+export interface PaymentReceiptTemplateInput {
+  organizationName: string;
+  invoiceNumber: string;
+  planName: string;
+  amount: string;
+  method: string;
+  reference: string;
+  paidAt: string;
+  periodEnd: string | null;
+  lang: EmailLang;
+}
+
+const RECEIPT_COPY = {
+  pt: {
+    subject: (invoice: string) => `Recibo de pagamento ${invoice} — FilaZero`,
+    greeting: (name: string) => `Olá ${name},`,
+    intro: "Confirmámos o pagamento da sua subscrição FilaZero. Obrigado!",
+    invoice: "Fatura",
+    plan: "Plano",
+    amount: "Valor",
+    method: "Método de pagamento",
+    reference: "Referência",
+    paidAt: "Data de pagamento",
+    periodEnd: "Subscrição válida até",
+    note: "Guarde este recibo para os seus registos. A fatura fica disponível no painel de gestão.",
+    footer: "FilaZero — gestão de filas presenciais",
+  },
+  en: {
+    subject: (invoice: string) => `Payment receipt ${invoice} — FilaZero`,
+    greeting: (name: string) => `Hi ${name},`,
+    intro: "We have confirmed the payment of your FilaZero subscription. Thank you!",
+    invoice: "Invoice",
+    plan: "Plan",
+    amount: "Amount",
+    method: "Payment method",
+    reference: "Reference",
+    paidAt: "Paid on",
+    periodEnd: "Subscription valid until",
+    note: "Keep this receipt for your records. The invoice is available in the management panel.",
+    footer: "FilaZero — on-site queue management",
+  },
+} as const;
+
+const PAYMENT_METHOD_LABELS: Record<string, { pt: string; en: string }> = {
+  MULTICAIXA_EXPRESS: { pt: "Multicaixa Express", en: "Multicaixa Express" },
+  BANK_TRANSFER: { pt: "Transferência bancária", en: "Bank transfer" },
+  CARD: { pt: "Cartão Visa/Mastercard", en: "Visa/Mastercard card" },
+};
+
+export function paymentMethodLabel(method: string, lang: EmailLang): string {
+  return PAYMENT_METHOD_LABELS[method]?.[lang] ?? method;
+}
+
+export function renderPaymentReceiptEmail(
+  input: PaymentReceiptTemplateInput,
+): RenderedEmail {
+  const copy = RECEIPT_COPY[input.lang];
+  const rows: Array<[string, string]> = [
+    [copy.invoice, input.invoiceNumber],
+    [copy.plan, input.planName],
+    [copy.amount, input.amount],
+    [copy.method, input.method],
+    [copy.reference, input.reference],
+    [copy.paidAt, input.paidAt],
+  ];
+  if (input.periodEnd) rows.push([copy.periodEnd, input.periodEnd]);
+
+  const text = [
+    copy.greeting(input.organizationName),
+    "",
+    copy.intro,
+    "",
+    ...rows.map(([label, value]) => `${label}: ${value}`),
+    "",
+    copy.note,
+    "",
+    copy.footer,
+  ].join("\n");
+
+  const rowsHtml = rows
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:6px 12px 6px 0;color:#475569;">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="${input.lang}">
+  <body style="margin:0;padding:24px;background:#f6f8fb;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;">
+      <h1 style="margin:0 0 12px;font-size:20px;">FilaZero</h1>
+      <p style="margin:0 0 12px;">${copy.greeting(escapeHtml(input.organizationName))}</p>
+      <p style="margin:0 0 20px;color:#475569;">${copy.intro}</p>
+      <table style="border-collapse:collapse;font-size:14px;">${rowsHtml}</table>
+      <p style="margin:20px 0 0;color:#64748b;font-size:13px;">${copy.note}</p>
+      <hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0;" />
+      <p style="margin:0;color:#94a3b8;font-size:12px;">${copy.footer}</p>
+    </div>
+  </body>
+</html>`;
+
+  return { subject: copy.subject(input.invoiceNumber), text, html };
+}
+
 export function renderPasswordResetEmail(
   input: PasswordResetTemplateInput,
 ): RenderedEmail {

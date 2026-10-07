@@ -13,6 +13,7 @@
  */
 import "server-only";
 import type {
+  PaymentMethod as PaymentMethodName,
   PaymentProvider as PaymentProviderName,
   Transaction,
 } from "@prisma/client";
@@ -38,6 +39,9 @@ import {
   generatePaymentReference,
   webhookSecretFor,
 } from "./payment-provider";
+import { providerForMethod } from "./payment-methods";
+import { nextInvoiceNumber } from "./invoice-number";
+import { deliverPaymentReceipt } from "./receipt.service";
 import { verifySignature } from "./signature";
 import { getSubscription } from "./subscription.service";
 
@@ -51,12 +55,16 @@ export function serializeTransaction(transaction: Transaction) {
     organizationId: transaction.organizationId,
     planId: transaction.planId,
     provider: transaction.provider,
+    method: transaction.method,
     status: transaction.status,
     amountCents: transaction.amountCents,
     currency: transaction.currency,
     reference: transaction.reference,
+    invoiceNumber: transaction.invoiceNumber,
     providerReference: transaction.providerReference,
     paidAt: transaction.paidAt,
+    proofSubmittedAt: transaction.proofSubmittedAt,
+    receiptSentAt: transaction.receiptSentAt,
     failureReason: transaction.failureReason,
     createdAt: transaction.createdAt,
   };
@@ -84,6 +92,7 @@ export async function startCheckout(
   ctx: AuthContext,
   organizationId: string,
   planId: string,
+  method: PaymentMethodName,
   meta: RequestMeta,
 ): Promise<CheckoutResult> {
   requirePermission(ctx, "billing:manage");
@@ -100,8 +109,7 @@ export async function startCheckout(
 
   const subscription = await getSubscription(organizationId);
   const reference = generatePaymentReference();
-  const provider: PaymentProviderName =
-    getEnv().PAYMENT_PROVIDER === "stripe" ? "STRIPE" : "INVOICE";
+  const provider: PaymentProviderName = providerForMethod(method);
 
   // A real payable record first: the reference exists even if the provider call
   // fails, and a failure is recorded rather than hidden.
@@ -111,6 +119,7 @@ export async function startCheckout(
       subscriptionId: subscription?.id ?? null,
       planId: plan.id,
       provider,
+      method,
       status: "PENDING",
       amountCents: plan.priceCents,
       currency: plan.currency,
@@ -120,7 +129,7 @@ export async function startCheckout(
 
   let session;
   try {
-    session = await createCheckoutSession(transaction, plan);
+    session = await createCheckoutSession(transaction, plan, method);
   } catch (error) {
     await db.transaction.update({
       where: { id: transaction.id },
@@ -146,7 +155,7 @@ export async function startCheckout(
     action: "billing.checkout_started",
     entityType: "transaction",
     entityId: transaction.id,
-    metadata: { organizationId, plan: plan.code, reference, provider },
+    metadata: { organizationId, plan: plan.code, reference, provider, method },
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
@@ -299,9 +308,10 @@ export async function applyPaymentEvent(
       return { duplicate: false as const, transaction: failed };
     }
 
-    // Conditional claim: only one concurrent webhook can move PENDING -> SUCCEEDED.
+    // Conditional claim: only one concurrent webhook can move a pending (or
+    // under-review) transaction to SUCCEEDED.
     const claimed = await tx.transaction.updateMany({
-      where: { id: transaction.id, status: "PENDING" },
+      where: { id: transaction.id, status: { in: ["PENDING", "UNDER_REVIEW"] } },
       data: {
         status: "SUCCEEDED",
         providerEventId: event.eventId,
@@ -344,9 +354,12 @@ export async function applyPaymentEvent(
       },
     });
 
+    // Invoice numbers are only consumed by real, paid invoices.
+    const invoiceNumber = await nextInvoiceNumber(tx, event.paidAt ?? now);
+
     const paid = await tx.transaction.update({
       where: { id: transaction.id },
-      data: { subscriptionId: subscription.id },
+      data: { subscriptionId: subscription.id, invoiceNumber },
     });
 
     await recordAudit(tx, {
@@ -356,8 +369,10 @@ export async function applyPaymentEvent(
       metadata: {
         reference: event.reference,
         provider: event.provider,
+        method: transaction.method,
         plan: plan.code,
         organizationId: transaction.organizationId,
+        invoiceNumber,
         periodEnd: periodEnd.toISOString(),
       },
       ipAddress: meta.ipAddress,
@@ -366,6 +381,12 @@ export async function applyPaymentEvent(
 
     return { duplicate: false as const, transaction: paid };
   });
+
+  // The receipt is sent after the money is committed; SMTP can never roll back a
+  // payment. Delivery is idempotent through `receipt_sent_at`.
+  if (!result.duplicate && result.transaction.status === "SUCCEEDED") {
+    await deliverPaymentReceipt(result.transaction.id).catch(() => undefined);
+  }
 
   return {
     duplicate: result.duplicate,

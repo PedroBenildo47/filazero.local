@@ -111,11 +111,38 @@ mais forte exige integração com um verificador externo ou revisão manual.
 
 O papel `ADMINISTRATOR` é o dono da plataforma e não tem permissões de cliente,
 staff, gestor, faturação ou operação. Além de criar organizações e atribuir
-planos/estados, só pode consultar `/api/admin/metrics`, que devolve contagens
-globais de organizações por estado e utilizadores total/ativos; não retorna
-nomes, IDs ou listas de organizações/utilizadores. Leituras de organizações,
-filiais, membros, billing, filas, tickets, histórico e SSE exigem membership e
-role operacional, e respondem `403 FORBIDDEN` para o Super Admin.
+planos/estados, usa a **superfície de plataforma** descrita abaixo. Leituras de
+organizações, filiais, membros, billing, filas, tickets, histórico e SSE
+exigem membership e role operacional, e continuam a responder `403 FORBIDDEN`
+para o Super Admin — o isolamento multi-tenant não é enfraquecido.
+
+## Painel de plataforma (Super Admin)
+
+Superfície dedicada (`/api/admin/*`), acessível **apenas** ao papel
+`ADMINISTRATOR` (`platform:admin`). É o único ponto que lê intencionalmente
+através de organizações; as rotas tenant mantêm-se `403 FORBIDDEN` para o Super
+Admin.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/admin/metrics` | Contagens agregadas (organizações/utilizadores) |
+| GET | `/api/admin/organizations?status=&planCode=&q=&page=&pageSize=` | Diretório global de organizações |
+| GET | `/api/admin/organizations/{id}` | Detalhe (inclui filiais e contagens) |
+| PATCH | `/api/admin/organizations/{id}/status` | Suspender/reativar (`ACTIVE`/`SUSPENDED`) |
+| DELETE | `/api/admin/organizations/{id}` | Eliminação permanente (corpo `{ confirmName }`) |
+| GET | `/api/admin/finance?months=` | Receita consolidada, MRR e subscrições |
+| GET | `/api/admin/audit-logs?action=&entityType=&actorUserId=&from=&to=&page=&pageSize=` | Auditoria global |
+
+Regras:
+
+- A receita conta apenas transações `SUCCEEDED`; não existe atalho de
+  administrador para marcar um pagamento como pago.
+- A eliminação permanente é bloqueada quando a organização tem pelo menos uma
+  transação `SUCCEEDED` (`409 CONFLICT`) — nesse caso só pode ser suspensa. É
+  também exigido confirmar o nome exato (`400 BAD_REQUEST` se não corresponder).
+- A eliminação é transacional (cascata de filiais, filas, senhas, membros,
+  subscrição e transações) e os registos de auditoria **sobrevivem**, com um
+  snapshot da organização em `metadata`.
 
 `GET /api/organizations/{id}/analytics?from=&to=&timezone=` devolve séries
 agregadas, sem dados pessoais nem identificadores de tickets. `from` é

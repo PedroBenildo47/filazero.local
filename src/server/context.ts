@@ -106,3 +106,14 @@ export function assertManagerOfOrganization(
 ): void {
   assertOrganizationRole(ctx, organizationId, ["MANAGER"]);
 }
+
+/**
+ * Guard for the platform-operator (Super Admin) surface.
+ *
+ * This is deliberately separate from `assertOrganizationAccess`, which throws
+ * for ADMINISTRATOR. Platform services intentionally read across tenants; they
+ * must never be reachable through the tenant routes.
+ */
+export function assertPlatformAdmin(ctx: AuthContext): void {
+  requirePermission(ctx, "platform:admin");
+}

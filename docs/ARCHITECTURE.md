@@ -67,7 +67,9 @@ componente de cliente.** As dependências de Node são marcadas com o pacote
   expõe:
   - `assertOrganizationAccess(ctx, organizationId)`
   - `assertBranchAccess(ctx, organizationId, branchId)`
-- `ADMINISTRATOR` tem acesso global; `CUSTOMER` não precisa de filiação.
+- `ADMINISTRATOR` **não** acede às rotas tenant (continuam `403`); usa uma
+  superfície de plataforma dedicada (`src/server/platform/`) que lê
+  intencionalmente através de organizações. `CUSTOMER` não precisa de filiação.
 - Um `STAFF` da Organização A nunca acede a dados da Organização B: a query é
   sempre limitada pelo `organizationId` e validada antes de tocar no banco.
 
@@ -233,6 +235,22 @@ backend.
   cliente (evitando sondar endereços).
 - Detalhe em [BILLING.md](./BILLING.md).
 
+## 8.4 Painel de plataforma / Super Admin (Fase 1 do roadmap)
+
+A superfície de plataforma vive em `src/server/platform/` e é a **única** que lê
+através de organizações. É guardada por `assertPlatformAdmin` (`platform:admin`)
+e nunca reutiliza `assertOrganizationAccess` (que bloqueia o admin de propósito).
+
+- `organization-admin.service.ts` — diretório global, detalhe, suspender/reativar
+  e eliminação permanente transacional (cascata preservando a auditoria).
+- `revenue.service.ts` — receita consolidada, receita por plano, série mensal
+  (fuso `Africa/Luanda`) e MRR; só conta transações `SUCCEEDED`.
+- `audit.service.ts` — leitura paginada e filtrável de `audit_logs`.
+
+Regras de segurança: eliminar exige o nome exato e é bloqueado quando existem
+transações pagas; as rotas tenant permanecem `403` para o `ADMINISTRATOR` (coberto
+pelo teste `tests/api/platform-security.spec.ts` e `tests/api/platform-admin.spec.ts`).
+
 ## 9. Ambientes e deploy
 
 - Configuração exclusivamente por variáveis de ambiente, validadas por zod
@@ -262,6 +280,7 @@ Empacotamento: `Dockerfile` multi-stage (`deps` → `builder` → `migrator` →
 | 10 Real-time (SSE) | ✅ |
 | 11 Notificações | ✅ |
 | 12 Dashboards | ✅ (cliente, staff, gestor, admin) |
+| + Painel Super Admin | ✅ financeiro, organizações, moderação e auditoria global |
 | 13 Segurança | ✅ rate limiting (PostgreSQL), CORS por middleware, cabeçalhos |
 | 14 Testes | ✅ 81 unit + 67 integração + 159 HTTP |
 | 15 Deploy | ✅ Dockerfile multi-stage, compose, `.dockerignore`, DEPLOY.md |

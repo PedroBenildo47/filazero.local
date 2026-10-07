@@ -178,6 +178,7 @@ model Organization {
   @@index([city])
   @@index([category])
   @@index([name])
+  @@index([createdAt])
   @@map("organizations")
 }
 
@@ -361,6 +362,7 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
   @@index([action, createdAt])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
@@ -469,6 +471,7 @@ model Transaction {
 
   @@index([organizationId, status])
   @@index([status, createdAt])
+  @@index([status, paidAt])
   @@index([planId])
   @@map("transactions")
 }

@@ -1208,6 +1208,52 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
+/* ------------------------------------------------------------- admin tabs */
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-block: 1rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.tab {
+  border: 0;
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  color: var(--fg-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.is-active {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.table-scroll .table {
+  min-width: 760px;
+}
+
 .analytics-page .card {
   margin-block: 1rem;
 }

@@ -164,16 +164,19 @@ model Organization {
   country     String?            @db.VarChar(120)
   phone       String?            @db.VarChar(32)
   email       String?            @db.VarChar(255)
+  /// NIF (Angolan tax identification number), required on every fiscal document.
+  taxId       String?            @map("tax_id") @db.VarChar(20)
   status      OrganizationStatus @default(ACTIVE)
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  branches     Branch[]
-  members      OrganizationMember[]
-  queues       Queue[]
-  subscription Subscription?
-  transactions Transaction[]
-  documents    OrganizationDocument[]
+  branches      Branch[]
+  members       OrganizationMember[]
+  queues        Queue[]
+  subscription  Subscription?
+  transactions  Transaction[]
+  documents     OrganizationDocument[]
+  invoiceSeries InvoiceSeries[]
 
   @@index([status])
   @@index([city])
@@ -404,6 +407,13 @@ enum PaymentMethod {
   CARD
 }
 
+/// Fiscal document type. `FT` = Factura, `FR` = Factura-Recibo (payment
+/// received at issuance, the usual case for subscription payments).
+enum InvoiceDocumentType {
+  FT
+  FR
+}
+
 enum PaymentProvider {
   /// Bank transfer / invoice: a real reference is issued and the finance system
   /// (or the bank aggregator) confirms it through the signed webhook.
@@ -472,7 +482,31 @@ model Transaction {
   /// Human-facing reference the payer quotes (also the idempotency key).
   reference         String            @unique @db.VarChar(64)
   /// Sequential invoice number, assigned only when a payment really succeeds.
-  invoiceNumber     String?           @unique @map("invoice_number") @db.VarChar(40)
+  /// Official document number inside the organization's series, e.g.
+  /// `FR2026/000001`. Unique per series, not globally: every taxpayer keeps
+  /// its own series.
+  invoiceNumber     String?           @map("invoice_number") @db.VarChar(40)
+  /* ------------------------- Fiscal document (AGT) ------------------------- */
+  seriesId          String?           @map("series_id") @db.Uuid
+  /// Snapshot of the series code at issuance (e.g. `FR2026`).
+  seriesCode        String?           @map("series_code") @db.VarChar(20)
+  /// Position inside the series; the pair (seriesCode, sequence) is the document.
+  sequence          Int?
+  /// Net amount (base tributável), VAT and gross total, all in cents.
+  subtotalCents     Int?              @map("subtotal_cents")
+  vatCents          Int?              @map("vat_cents")
+  vatRateBps        Int?              @map("vat_rate_bps")
+  customerTaxId     String?           @map("customer_tax_id") @db.VarChar(20)
+  issuerTaxId       String?           @map("issuer_tax_id") @db.VarChar(20)
+  /// Integrity/authenticity hash printed on the document.
+  invoiceHash       String?           @map("invoice_hash") @db.VarChar(200)
+  /// Payload encoded in the QR code printed on the document.
+  invoiceQr         String?           @map("invoice_qr") @db.Text
+  invoiceIssuedAt   DateTime?         @map("invoice_issued_at") @db.Timestamptz(6)
+  invoiceVoidedAt   DateTime?         @map("invoice_voided_at") @db.Timestamptz(6)
+  invoiceVoidReason String?           @map("invoice_void_reason") @db.VarChar(300)
+  /// True only when signed with a real AGT software certificate.
+  agtCertified      Boolean           @default(false) @map("agt_certified")
   /// Set when a bank-transfer/Multicaixa proof is uploaded.
   proofSubmittedAt  DateTime?         @map("proof_submitted_at") @db.Timestamptz(6)
   /// Set once the automatic payment receipt email has been handed to SMTP.
@@ -486,16 +520,42 @@ model Transaction {
   createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  plan         Plan          @relation(fields: [planId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  plan         Plan           @relation(fields: [planId], references: [id])
   proofs       PaymentProof[]
+  series       InvoiceSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status])
   @@index([status, createdAt])
   @@index([status, paidAt])
   @@index([planId])
+  @@index([organizationId, invoiceIssuedAt])
+  @@unique([seriesId, sequence])
   @@map("transactions")
+}
+
+/// Official document series per organization, document type and year.
+/// AGT requires each taxpayer to number documents inside an identified series.
+model InvoiceSeries {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  documentType   InvoiceDocumentType @default(FR) @map("document_type")
+  year           Int
+  /// Human series code, e.g. `FR2026`.
+  code           String              @db.VarChar(20)
+  /// Next number to allocate; incremented atomically by the database.
+  nextNumber     Int                 @default(1) @map("next_number")
+  active         Boolean             @default(true)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([organizationId, documentType, year])
+  @@index([organizationId, year])
+  @@map("invoice_series")
 }
 
 /// Proof of payment (bank transfer / Multicaixa Express) uploaded by the payer.

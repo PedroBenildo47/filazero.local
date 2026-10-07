@@ -40,7 +40,17 @@ import {
   webhookSecretFor,
 } from "./payment-provider";
 import { providerForMethod } from "./payment-methods";
-import { nextInvoiceNumber } from "./invoice-number";
+import {
+  buildInvoiceCanonical,
+  invoiceQrPayload,
+  previousHashOf,
+  vatBreakdown,
+} from "./agt";
+import {
+  allocateInvoiceNumber,
+  previousInvoiceHash,
+} from "./invoice-series.service";
+import { signInvoice } from "./invoice-signing";
 import { deliverPaymentReceipt } from "./receipt.service";
 import { verifySignature } from "./signature";
 import { getSubscription } from "./subscription.service";
@@ -65,6 +75,17 @@ export function serializeTransaction(transaction: Transaction) {
     paidAt: transaction.paidAt,
     proofSubmittedAt: transaction.proofSubmittedAt,
     receiptSentAt: transaction.receiptSentAt,
+    seriesCode: transaction.seriesCode,
+    sequence: transaction.sequence,
+    subtotalCents: transaction.subtotalCents,
+    vatCents: transaction.vatCents,
+    vatRateBps: transaction.vatRateBps,
+    customerTaxId: transaction.customerTaxId,
+    issuerTaxId: transaction.issuerTaxId,
+    invoiceHash: transaction.invoiceHash,
+    invoiceQr: transaction.invoiceQr,
+    invoiceIssuedAt: transaction.invoiceIssuedAt,
+    agtCertified: transaction.agtCertified,
     failureReason: transaction.failureReason,
     createdAt: transaction.createdAt,
   };
@@ -93,6 +114,7 @@ export async function startCheckout(
   organizationId: string,
   planId: string,
   method: PaymentMethodName,
+  taxId: string | null | undefined,
   meta: RequestMeta,
 ): Promise<CheckoutResult> {
   requirePermission(ctx, "billing:manage");
@@ -124,6 +146,7 @@ export async function startCheckout(
       amountCents: plan.priceCents,
       currency: plan.currency,
       reference,
+      customerTaxId: taxId && taxId.length > 0 ? taxId : null,
     },
   });
 
@@ -354,12 +377,65 @@ export async function applyPaymentEvent(
       },
     });
 
+    // ---- Fiscal document (AGT) ------------------------------------------
     // Invoice numbers are only consumed by real, paid invoices.
-    const invoiceNumber = await nextInvoiceNumber(tx, event.paidAt ?? now);
+    const issuedAt = event.paidAt ?? now;
+    const organization = await tx.organization.findUnique({
+      where: { id: transaction.organizationId },
+      select: { taxId: true },
+    });
+    const allocation = await allocateInvoiceNumber(
+      tx,
+      transaction.organizationId,
+      "FR",
+      issuedAt,
+    );
+    const breakdown = vatBreakdown(transaction.amountCents, getEnv().IVA_RATE_BPS);
+    const issuerTaxId = getEnv().PLATFORM_TAX_ID ?? "";
+    // An explicit NIF given at checkout wins over the organization profile.
+    const customerTaxId =
+      transaction.customerTaxId ?? organization?.taxId ?? "";
+    const previousHash = previousHashOf(
+      await previousInvoiceHash(tx, allocation.seriesId, allocation.sequence),
+    );
+    const canonicalInput = {
+      issuerTaxId,
+      customerTaxId,
+      documentType: "FR" as const,
+      seriesCode: allocation.seriesCode,
+      sequence: allocation.sequence,
+      issuedAt: issuedAt.toISOString(),
+      subtotalCents: breakdown.subtotalCents,
+      vatCents: breakdown.vatCents,
+      totalCents: breakdown.totalCents,
+      currency: transaction.currency,
+      previousHash,
+    };
+    const signature = signInvoice(buildInvoiceCanonical(canonicalInput));
+    const invoiceNumber = allocation.invoiceNumber;
 
     const paid = await tx.transaction.update({
       where: { id: transaction.id },
-      data: { subscriptionId: subscription.id, invoiceNumber },
+      data: {
+        subscriptionId: subscription.id,
+        invoiceNumber,
+        seriesId: allocation.seriesId,
+        seriesCode: allocation.seriesCode,
+        sequence: allocation.sequence,
+        subtotalCents: breakdown.subtotalCents,
+        vatCents: breakdown.vatCents,
+        vatRateBps: getEnv().IVA_RATE_BPS,
+        customerTaxId: customerTaxId || null,
+        issuerTaxId: issuerTaxId || null,
+        invoiceHash: signature.hash,
+        invoiceQr: invoiceQrPayload({
+          ...canonicalInput,
+          invoiceNumber,
+          hash: signature.hash,
+        }),
+        invoiceIssuedAt: issuedAt,
+        agtCertified: signature.certified,
+      },
     });
 
     await recordAudit(tx, {
@@ -442,7 +518,10 @@ export async function handlePaymentWebhook(
       const existing = await db.transaction.findUnique({
         where: { reference: event.reference },
       });
-      if (existing) {
+      // Only a genuinely already-applied event counts as a duplicate. Any other
+      // unique conflict (e.g. an invoicing invariant) must surface as an error
+      // instead of silently pretending the payment was applied.
+      if (existing && existing.providerEventId === event.eventId) {
         return { duplicate: true, transaction: serializeTransaction(existing) };
       }
     }

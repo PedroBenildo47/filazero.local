@@ -7,9 +7,10 @@
  * closed.
  */
 import "server-only";
-import type { Queue, QueueStatus } from "@prisma/client";
-import { db } from "@/lib/db";
+import type { Prisma, Queue, QueueStatus } from "@prisma/client";
+import { db, Prisma as PrismaRuntime } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { generateQueueCode, isUuid } from "./queue-code";
 import type { RequestMeta } from "@/lib/http";
 import { paginationToSkipTake, type Pagination } from "@/lib/validation";
 import { recordAudit } from "@/server/audit/audit.service";
@@ -33,11 +34,25 @@ interface QueueScope {
   branchId: string;
 }
 
+/** True when a Prisma unique violation came from the queue `public_code` index. */
+function isQueueCodeConflict(error: unknown): boolean {
+  if (
+    !(error instanceof PrismaRuntime.PrismaClientKnownRequestError) ||
+    error.code !== "P2002"
+  ) {
+    return false;
+  }
+  const target = error.meta?.target;
+  const text = Array.isArray(target) ? target.join(",") : String(target ?? "");
+  return text.includes("public_code") || text.includes("publicCode");
+}
+
 export function publicQueue(queue: Queue) {
   return {
     id: queue.id,
     organizationId: queue.organizationId,
     branchId: queue.branchId,
+    publicCode: queue.publicCode,
     name: queue.name,
     description: queue.description,
     status: queue.status,
@@ -88,15 +103,26 @@ export async function createQueue(
   // Plan gate: expired/unpaid subscription -> 402, quota exceeded -> 403.
   await assertCanCreateQueue(branch.organizationId, branchId);
 
-  const queue = await db.queue.create({
-    data: {
-      organizationId: branch.organizationId,
-      branchId,
-      name: input.name,
-      description: input.description ?? null,
-      status: input.status ?? "CLOSED",
-    },
-  });
+  // Generate a unique public code, retrying only on a code collision (a
+  // duplicate name is a real conflict and must surface to the caller).
+  let queue: Queue | null = null;
+  for (let attempt = 0; attempt < 5 && !queue; attempt += 1) {
+    try {
+      queue = await db.queue.create({
+        data: {
+          organizationId: branch.organizationId,
+          branchId,
+          publicCode: generateQueueCode(),
+          name: input.name,
+          description: input.description ?? null,
+          status: input.status ?? "CLOSED",
+        },
+      });
+    } catch (error) {
+      if (!isQueueCodeConflict(error)) throw error;
+    }
+  }
+  if (!queue) throw AppError.conflict("Could not allocate a queue code");
 
   await recordAudit(db, {
     actorUserId: ctx.user.id,
@@ -279,15 +305,26 @@ export async function setQueueStatus(
   return publicQueue(queue);
 }
 
-/** Public queue information: no ticket owners, just availability. */
-export async function getPublicQueue(queueId: string) {
+/**
+ * Public queue information: no ticket owners, just availability.
+ *
+ * Accepts either the internal UUID or the short public code, so a scanned QR
+ * (which encodes the code) and a pasted link both resolve here.
+ */
+export async function getPublicQueue(queueIdOrCode: string) {
+  const value = queueIdOrCode.trim();
+  const identity: Prisma.QueueWhereInput = isUuid(value)
+    ? { id: value }
+    : { publicCode: value.toUpperCase() };
+
   const queue = await db.queue.findFirst({
     where: {
-      id: queueId,
+      ...identity,
       branch: { status: "ACTIVE", organization: { status: "ACTIVE" } },
     },
     select: {
       id: true,
+      publicCode: true,
       name: true,
       description: true,
       status: true,
@@ -299,7 +336,7 @@ export async function getPublicQueue(queueId: string) {
   if (!queue) throw AppError.notFound("Queue not found");
 
   const waitingCount = await db.ticket.count({
-    where: { queueId, status: "WAITING" },
+    where: { queueId: queue.id, status: "WAITING" },
   });
 
   return { ...queue, waitingCount };

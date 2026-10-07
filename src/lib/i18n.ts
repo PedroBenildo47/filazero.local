@@ -215,6 +215,7 @@ const pt = {
   "billing.paidAt": "Pago em",
   "billing.viewInvoice": "Ver fatura",
   "billing.print": "Imprimir",
+  "billing.downloadPdf": "Descarregar PDF",
   "billing.receiptNote": "O recibo é enviado automaticamente para o email da organização.",
   "billing.pendingReview": "Em análise",
 
@@ -342,6 +343,8 @@ const pt = {
   "manager.name": "Nome",
   "manager.category": "Categoria",
   "manager.city": "Cidade",
+  "manager.taxId": "NIF",
+  "manager.taxIdHint": "Número de Identificação Fiscal",
   "manager.saveOrganization": "Guardar organização",
   "manager.saved": "Guardado.",
   "manager.branches": "Filiais",
@@ -744,6 +747,7 @@ const en: Record<MessageKey, string> = {
   "billing.paidAt": "Paid on",
   "billing.viewInvoice": "View invoice",
   "billing.print": "Print",
+  "billing.downloadPdf": "Download PDF",
   "billing.receiptNote": "The receipt is sent automatically to the organization email.",
   "billing.pendingReview": "Under review",
 
@@ -863,6 +867,8 @@ const en: Record<MessageKey, string> = {
   "manager.name": "Name",
   "manager.category": "Category",
   "manager.city": "City",
+  "manager.taxId": "Tax ID (NIF)",
+  "manager.taxIdHint": "Taxpayer identification number",
   "manager.saveOrganization": "Save organization",
   "manager.saved": "Saved.",
   "manager.branches": "Branches",

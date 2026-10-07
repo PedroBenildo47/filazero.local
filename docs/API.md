@@ -248,6 +248,7 @@ após os receber o cliente volta a pedir o estado pelos endpoints autorizados.
 | GET | `/api/organizations/{id}/transactions` | `billing:read` | Histórico de pagamentos |
 | GET | `/api/organizations/{id}/invoices` | `billing:read` | Histórico de faturas (pagamentos `SUCCEEDED`) |
 | GET | `/api/organizations/{id}/invoices/{transactionId}` | `billing:read` | Fatura detalhada (para impressão) |
+| GET | `/api/organizations/{id}/invoices/{transactionId}/pdf` | `billing:read` | Fatura fiscal em PDF (layout AGT, com QR e hash) |
 | POST | `/api/organizations/{id}/transactions/{transactionId}/proof` | `billing:manage` | Envia o comprovativo (multipart `file`) |
 | GET | `/api/organizations/{id}/transactions/{transactionId}/proof` | `billing:read` | Descarrega o comprovativo mais recente |
 | POST | `/api/billing/checkout` | `billing:manage` | Inicia um checkout real (cria transação `PENDING`) |
@@ -255,9 +256,12 @@ após os receber o cliente volta a pedir o estado pelos endpoints autorizados.
 
 `POST /api/billing/checkout`
 ```json
-{ "organizationId": "…", "planId": "…", "method": "MULTICAIXA_EXPRESS" }
+{ "organizationId": "…", "planId": "…", "method": "MULTICAIXA_EXPRESS", "taxId": "5417000000" }
 ```
 `method` é `MULTICAIXA_EXPRESS` (por omissão), `BANK_TRANSFER` ou `CARD`.
+`taxId` (opcional) é o NIF a imprimir na fatura; aceita 9 ou 10 dígitos e é
+normalizado (espaços, pontos e hífenes são removidos). Sem `taxId`, usa-se o NIF
+da organização.
 Resposta: `{ reference, method, checkoutUrl, instructions, transaction }`. Um
 plano grátis (0) devolve `400 BAD_REQUEST` — nesses casos atribui-se o plano.
 
@@ -274,9 +278,12 @@ comprovativo move a transação `PENDING → UNDER_REVIEW` e **nunca** a marca c
 paga: só o webhook assinado pode passar a `SUCCEEDED`.
 
 Estados de transação: `PENDING`, `UNDER_REVIEW`, `SUCCEEDED`, `FAILED`,
-`REFUNDED`. Ao passar a `SUCCEEDED`, é atribuído um número de fatura sequencial
-(`FT/{ano}/{sequência}`) e o recibo é enviado automaticamente por email para o
-email da organização (ou para o primeiro gestor).
+`REFUNDED`. Ao passar a `SUCCEEDED`, é emitido o documento fiscal — número
+oficial na série da organização (`FR{ano}/{sequência}`, ex. `FR2026/000001`),
+base tributável + IVA (14% por omissão) a partir do valor bruto, NIF do emitente
+e do cliente, hash de integridade e payload do QR — e o recibo (com a fatura PDF
+anexada) é enviado automaticamente por email para o email da organização (ou
+para o primeiro gestor).
 
 `POST /api/billing/webhook` — sem autenticação de sessão; o credor é a
 assinatura:

@@ -9,7 +9,7 @@
 import "server-only";
 import { getEnv, isEmailConfigured } from "@/lib/env";
 import { logger } from "@/lib/logger";
-import { sendMail } from "./mailer";
+import { sendMail, type MailAttachment } from "./mailer";
 import {
   paymentMethodLabel,
   renderPasswordResetEmail,
@@ -67,6 +67,8 @@ export interface PaymentReceiptEmailInput {
   paidAt: Date;
   periodEnd: Date | null;
   lang: EmailLang;
+  /** The fiscal invoice PDF, attached to the receipt when available. */
+  attachments?: MailAttachment[];
 }
 
 function formatDate(date: Date, lang: EmailLang): string {
@@ -95,7 +97,7 @@ export async function sendPaymentReceiptEmail(
   });
 
   try {
-    await sendMail({ to: input.to, ...rendered });
+    await sendMail({ to: input.to, ...rendered, attachments: input.attachments });
     return true;
   } catch (error) {
     logger.error({ err: error, to: input.to }, "payment receipt email failed");

@@ -281,7 +281,7 @@ export async function runB2BPaymentsSuite(options: {
     const invoiceNumber = confirmed.data?.transaction.invoiceNumber ?? "";
     reporter.check(
       "b2b: a sequential invoice number is assigned on payment",
-      /^FT\/\d{4}\/\d{6}$/.test(invoiceNumber),
+      /^FR\d{4}\/\d{6}$/.test(invoiceNumber),
       invoiceNumber,
     );
 
@@ -324,6 +324,16 @@ export async function runB2BPaymentsSuite(options: {
     reporter.check(
       "b2b: the receipt shows the amount",
       decoded.includes(`${(starter.priceCents / 100).toFixed(2)} AOA`),
+    );
+    // The filename lives in an unquoted MIME header (`name=fatura-…`), which the
+    // naive quoted-printable helper mis-decodes (`=fa` → `ú`). Assert on the
+    // structural evidence instead: a mixed message, a PDF part, and the base64
+    // magic of `%PDF-` (`JVBERi0`).
+    reporter.check(
+      "b2b: the receipt carries the fiscal invoice PDF as an attachment",
+      decoded.includes("multipart/mixed") &&
+        decoded.includes("application/pdf") &&
+        decoded.includes("JVBERi0"),
     );
     const paidRow = await db.transaction.findUnique({ where: { id: bankTxId } });
     reporter.check(

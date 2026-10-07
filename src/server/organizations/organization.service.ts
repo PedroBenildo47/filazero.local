@@ -43,6 +43,7 @@ export async function createOrganization(
       country: input.country ?? null,
       phone: input.phone ?? null,
       email: input.email ?? null,
+      taxId: input.taxId ?? null,
     },
   });
 
@@ -151,6 +152,7 @@ export async function updateOrganization(
       ...(input.country === undefined ? {} : { country: input.country }),
       ...(input.phone === undefined ? {} : { phone: input.phone }),
       ...(input.email === undefined ? {} : { email: input.email }),
+      ...(input.taxId === undefined ? {} : { taxId: input.taxId || null }),
     },
   });
 

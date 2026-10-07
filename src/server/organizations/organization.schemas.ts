@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { OrganizationStatus } from "@prisma/client";
 import { emailSchema, paginationSchema, phoneSchema } from "@/lib/validation";
+import { nifSchema } from "@/server/billing/billing.schemas";
 
 export const createOrganizationSchema = z.object({
   name: z.string().trim().min(2, "Name is too short").max(200),
@@ -11,6 +12,8 @@ export const createOrganizationSchema = z.object({
   country: z.string().trim().max(120).optional(),
   phone: phoneSchema.optional(),
   email: emailSchema.optional(),
+  /** Taxpayer number (NIF) printed on fiscal documents. */
+  taxId: nifSchema,
 });
 
 export const updateOrganizationSchema = createOrganizationSchema.partial();

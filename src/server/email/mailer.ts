@@ -10,11 +10,18 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { getEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 
+export interface MailAttachment {
+  filename: string;
+  content: Uint8Array | Buffer;
+  contentType?: string;
+}
+
 export interface MailMessage {
   to: string;
   subject: string;
   text: string;
   html: string;
+  attachments?: MailAttachment[];
 }
 
 const globalForMailer = globalThis as unknown as {
@@ -53,6 +60,11 @@ export async function sendMail(message: MailMessage): Promise<void> {
     subject: message.subject,
     text: message.text,
     html: message.html,
+    attachments: message.attachments?.map((attachment) => ({
+      filename: attachment.filename,
+      content: Buffer.from(attachment.content),
+      contentType: attachment.contentType,
+    })),
   });
   logger.info(
     { messageId: info.messageId, to: message.to, subject: message.subject },

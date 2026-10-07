@@ -1312,6 +1312,42 @@ select.input {
   letter-spacing: 0.08em;
 }
 
+/* --------------------------------------------------- B2B payment methods */
+.method-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.method-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.method-option:hover {
+  border-color: var(--border-strong);
+}
+
+.method-option.is-selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.method-option input {
+  accent-color: var(--primary);
+}
+
 .analytics-page .card {
   margin-block: 1rem;
 }

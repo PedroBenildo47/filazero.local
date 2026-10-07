@@ -80,6 +80,21 @@ enum NotificationType {
   QUEUE_STATUS_CHANGED
 }
 
+/// Out-of-app delivery channels for a notification.
+enum NotificationChannel {
+  SMS
+  WHATSAPP
+}
+
+/// Lifecycle of a single channel delivery (an outbox row).
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 enum OrganizationDocumentType {
   COMPANY_REGISTRATION
   TAX_REGISTRATION
@@ -102,12 +117,17 @@ model User {
   status          UserStatus @default(ACTIVE)
   emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(6)
   lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  /// Explicit consent for out-of-app queue notifications. Off until the
+  /// customer opts in from their account, so nothing is ever sent silently.
+  smsOptIn        Boolean    @default(false) @map("sms_opt_in")
+  whatsappOptIn   Boolean    @default(false) @map("whatsapp_opt_in")
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  memberships         OrganizationMember[]
-  tickets             Ticket[]
-  notifications       Notification[]
+  memberships            OrganizationMember[]
+  tickets                Ticket[]
+  notifications          Notification[]
+  notificationDeliveries NotificationDelivery[]
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
   auditLogs           AuditLog[]           @relation("AuditActor")
@@ -329,8 +349,42 @@ model Notification {
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
+  deliveries NotificationDelivery[]
+
   @@index([userId, read, createdAt])
   @@map("notifications")
+}
+
+/// Outbox for out-of-app notification delivery (SMS / WhatsApp).
+///
+/// A row is written inside the same transaction as the notification it belongs
+/// to, so a message can never be sent for an event that did not happen. The
+/// dispatcher claims rows with `FOR UPDATE SKIP LOCKED` (safe across instances)
+/// and records the provider outcome. Delivery is idempotent through the
+/// `(notification_id, channel)` unique index.
+model NotificationDelivery {
+  id                String                     @id @default(uuid()) @db.Uuid
+  notificationId    String                     @map("notification_id") @db.Uuid
+  userId            String                     @map("user_id") @db.Uuid
+  channel           NotificationChannel
+  status            NotificationDeliveryStatus @default(PENDING)
+  /// Recipient address at send time (the user's phone, normalised).
+  recipient         String                     @db.VarChar(32)
+  provider          String?                    @db.VarChar(40)
+  providerMessageId String?                    @map("provider_message_id") @db.VarChar(200)
+  error             String?                    @db.Text
+  attempts          Int                        @default(0)
+  sentAt            DateTime?                  @map("sent_at") @db.Timestamptz(6)
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("notification_deliveries")
 }
 
 /// Fixed-window rate-limit counters.

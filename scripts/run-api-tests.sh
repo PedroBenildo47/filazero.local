@@ -15,6 +15,17 @@ cd "$(dirname "$0")/.."
 PORT="${PORT:-3100}"
 BASE_URL="http://127.0.0.1:${PORT}"
 
+# The notification suite runs a real HTTP sink on this port and points both
+# providers at it, so SMS/WhatsApp delivery is exercised end to end.
+NOTIFICATION_PORT="${NOTIFICATION_PORT:-2526}"
+export SMS_API_URL="${SMS_API_URL:-http://127.0.0.1:${NOTIFICATION_PORT}/sms}"
+export SMS_API_TOKEN="${SMS_API_TOKEN:-test-sms-token-0123456789}"
+export SMS_SENDER_ID="${SMS_SENDER_ID:-FilaZero}"
+export WHATSAPP_API_BASE="${WHATSAPP_API_BASE:-http://127.0.0.1:${NOTIFICATION_PORT}}"
+export WHATSAPP_API_VERSION="${WHATSAPP_API_VERSION:-v21.0}"
+export WHATSAPP_PHONE_NUMBER_ID="${WHATSAPP_PHONE_NUMBER_ID:-123456789}"
+export WHATSAPP_ACCESS_TOKEN="${WHATSAPP_ACCESS_TOKEN:-test-whatsapp-token-0123456789}"
+
 echo "==> Building the application"
 npm run build
 

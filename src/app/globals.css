@@ -1254,6 +1254,64 @@ select.input {
   min-width: 760px;
 }
 
+/* ------------------------------------------------------- client entry */
+.entry-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  margin-block: 1.25rem;
+}
+
+.entry-grid .card {
+  margin: 0;
+}
+
+.qr-scanner {
+  position: relative;
+  width: min(92vw, 420px);
+  margin: 0 auto;
+  padding: 1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.qr-scanner-video {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.qr-scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -58%);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.qr-scanner-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+}
+
+.qr-code-value {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+}
+
 .analytics-page .card {
   margin-block: 1rem;
 }

@@ -56,22 +56,36 @@ interface NotificationsResponse {
   items: Notification[];
   unread: number;
 }
+interface NotificationPreferences {
+  phone: string | null;
+  smsOptIn: boolean;
+  whatsappOptIn: boolean;
+  smsConfigured: boolean;
+  whatsappConfigured: boolean;
+}
 
 function AccountDashboard() {
   const { t, tError, formatDateTime } = useI18n();
   const [data, setData] = useState<MyTickets | null>(null);
   const [notifications, setNotifications] = useState<NotificationsResponse | null>(null);
+  const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSaved, setPrefsSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [tickets, notes] = await Promise.all([
+      const [tickets, notes, preferences] = await Promise.all([
         api<MyTickets>("/api/tickets/me"),
         api<NotificationsResponse>("/api/notifications?pageSize=20"),
+        api<NotificationPreferences>("/api/notifications/preferences"),
       ]);
       setData(tickets);
       setNotifications(notes);
+      setPrefs(preferences);
+      setPhoneDraft((current) => (current.length === 0 ? preferences.phone ?? "" : current));
       setError(null);
     } catch (caught) {
       setError(tError(caught));
@@ -96,6 +110,25 @@ function AccountDashboard() {
       await refresh();
     } catch (caught) {
       setError(tError(caught));
+    }
+  }
+
+  async function savePreferences(next: Partial<NotificationPreferences>) {
+    setPrefsSaving(true);
+    setPrefsSaved(false);
+    try {
+      const updated = await api<NotificationPreferences>("/api/notifications/preferences", {
+        method: "PATCH",
+        json: next,
+      });
+      setPrefs(updated);
+      setPhoneDraft(updated.phone ?? "");
+      setPrefsSaved(true);
+      setError(null);
+    } catch (caught) {
+      setError(tError(caught));
+    } finally {
+      setPrefsSaving(false);
     }
   }
 
@@ -250,6 +283,53 @@ function AccountDashboard() {
             ))}
           </ul>
         )}
+      </Card>
+
+      <Card title={t("account.prefsTitle")} subtitle={t("account.prefsSubtitle")}>
+        <div className="field">
+          <span>{t("account.prefsPhone")}</span>
+          <input
+            className="input"
+            value={phoneDraft}
+            onChange={(event) => setPhoneDraft(event.target.value)}
+            placeholder="+244 9xx xxx xxx"
+            inputMode="tel"
+            autoComplete="tel"
+          />
+          <span className="subtle">{t("account.prefsPhoneHint")}</span>
+        </div>
+        <div className="row">
+          <button
+            type="button"
+            className={`btn ${prefs?.whatsappOptIn ? "btn-primary" : "btn-ghost"}`}
+            disabled={prefsSaving}
+            onClick={() => void savePreferences({ whatsappOptIn: !prefs?.whatsappOptIn })}
+          >
+            {t("account.prefsWhatsapp")}
+            {prefs && !prefs.whatsappConfigured
+              ? ` — ${t("account.prefsNotConfigured")}`
+              : ""}
+          </button>
+          <button
+            type="button"
+            className={`btn ${prefs?.smsOptIn ? "btn-primary" : "btn-ghost"}`}
+            disabled={prefsSaving}
+            onClick={() => void savePreferences({ smsOptIn: !prefs?.smsOptIn })}
+          >
+            {t("account.prefsSms")}
+            {prefs && !prefs.smsConfigured ? ` — ${t("account.prefsNotConfigured")}` : ""}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={prefsSaving}
+            onClick={() => void savePreferences({ phone: phoneDraft })}
+          >
+            {t("common.save")}
+          </button>
+        </div>
+        <p className="subtle">{t("account.prefsOptInHint")}</p>
+        {prefsSaved ? <p className="subtle">{t("account.prefsSaved")}</p> : null}
       </Card>
 
       <Card title={t("account.history")}>

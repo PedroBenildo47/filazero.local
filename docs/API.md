@@ -179,6 +179,23 @@ vínculo com `branchId: null` abrange todas as filiais; vínculos específicos
 restringem todas as agregações a essas filiais. `ADMINISTRATOR`, `STAFF` e
 gestores de outras organizações recebem `403 FORBIDDEN`.
 
+## Modo quiosque / totem (Fase 4 · Bloco 4)
+
+| Método | Rota | Permissão |
+| --- | --- | --- |
+| GET | `/api/public/queues/{queueId}/board` | público (apenas números de senha) |
+| POST | `/api/public/queues/{queueId}/tickets` | público (rate-limited por IP; exige modo quiosque ativo) |
+| PATCH | `/api/queues/{queueId}/kiosk` | gestor com vínculo ativo na organização |
+
+O modo quiosque permite a um cliente **sem conta** retirar uma senha a partir de
+um tablet/totem. `POST /api/public/queues/{queueId}/tickets` cria um ticket de
+visitante (`userId` nulo, `guestName`/`guestPhone` opcionais) e só funciona
+quando a fila tem `kioskEnabled = true` e está `OPEN`; é limitado a 8 pedidos por
+minuto por IP. O ecrã de sala consome `GET .../board`, que devolve o número em
+atendimento e os próximos a aguardar — nunca nomes, pelo que é seguro deixar num
+ecrã público. A gestão liga/desliga o modo por fila em
+`PATCH /api/queues/{queueId}/kiosk` com `{ "enabled": true }`.
+
 ## Filas (Fase 5)
 
 | Método | Rota | Permissão |

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { ApiError, api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Card, EmptyState, Spinner, StatCard } from "@/components/ui";
@@ -11,9 +11,22 @@ interface OrganizationOption {
   name: string;
 }
 
+type TicketStatus = "WAITING" | "CALLED" | "SERVING" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+
 interface AnalyticsData {
   period: { from: string; to: string; timezone: string };
-  totals: { issuedTickets: number; completedTickets: number };
+  totals: {
+    issuedTickets: number;
+    completedTickets: number;
+    cancelledTickets: number;
+    noShowTickets: number;
+    waitingTickets: number;
+    completionRateBps: number;
+    cancellationRateBps: number;
+    noShowRateBps: number;
+    averageWaitSeconds: number | null;
+    averageServiceSeconds: number | null;
+  };
   issuedByDay: Array<{ date: string; count: number }>;
   issuedByWeek: Array<{ weekStart: string; count: number }>;
   queuePerformance: Array<{
@@ -25,29 +38,24 @@ interface AnalyticsData {
     averageWaitSeconds: number | null;
     averageServiceSeconds: number | null;
   }>;
+  branchPerformance: Array<{
+    branchId: string;
+    branchName: string;
+    completedTickets: number;
+    averageWaitSeconds: number | null;
+    averageServiceSeconds: number | null;
+  }>;
+  statusDistribution: Array<{ status: TicketStatus; count: number }>;
   completedByHour: Array<{ hour: number; count: number }>;
+  peak: {
+    busiestDay: { date: string; count: number } | null;
+    busiestHour: { hour: number; count: number } | null;
+  };
 }
 
 interface ChartPoint {
   label: string;
   value: number;
-}
-
-interface CsvLabels {
-  organization: string;
-  periodFrom: string;
-  periodTo: string;
-  daily: string;
-  weekly: string;
-  date: string;
-  weekStart: string;
-  tickets: string;
-  queue: string;
-  branch: string;
-  completed: string;
-  averageWait: string;
-  averageService: string;
-  hour: string;
 }
 
 function BarChart({
@@ -105,70 +113,18 @@ function BarChart({
   );
 }
 
-function formatDuration(seconds: number | null, locale: string): string {
-  if (seconds === null) return "—";
+function formatDuration(seconds: number | null, locale: string, fallback: string): string {
+  if (seconds === null) return fallback;
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(minutes) +
-    ` ${locale === "pt-PT" ? "min" : "min"} ${remainder} s`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(minutes)} min ${remainder} s`;
 }
 
-function csvCell(value: string | number): string {
-  let text = String(value);
-  if (/^[\s]*[=+@\-]/.test(text)) text = `'${text}`;
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(
-  data: AnalyticsData,
-  organizationName: string,
-  labels: CsvLabels,
-) {
-  const rows: Array<Array<string | number>> = [
-    [labels.organization, organizationName],
-    [labels.periodFrom, data.period.from],
-    [labels.periodTo, data.period.to],
-    [],
-    [labels.daily, labels.date, labels.tickets],
-    ...data.issuedByDay.map((row) => [labels.daily, row.date, row.count]),
-    [],
-    [labels.weekly, labels.weekStart, labels.tickets],
-    ...data.issuedByWeek.map((row) => [labels.weekly, row.weekStart, row.count]),
-    [],
-    [labels.queue, labels.branch, labels.completed, labels.averageWait, labels.averageService],
-    ...data.queuePerformance.map((row) => [
-      row.queueName,
-      row.branchName,
-      row.completedTickets,
-      row.averageWaitSeconds ?? "",
-      row.averageServiceSeconds ?? "",
-    ]),
-    [],
-    [labels.hour, labels.completed],
-    ...data.completedByHour.map((row) => [row.hour, row.count]),
-  ];
-  const csv = `\uFEFF${rows.map((row) => row.map((cell) => csvCell(cell ?? "")).join(",")).join("\r\n")}`;
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `filazero-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.hidden = true;
-  document.body.appendChild(link);
-  link.click();
-  window.setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 1_000);
-}
-
-function printAnalyticsReport() {
-  document.body.classList.add("analytics-printing");
-  window.addEventListener(
-    "afterprint",
-    () => document.body.classList.remove("analytics-printing"),
-    { once: true },
-  );
-  window.print();
+function formatRate(bps: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(bps / 10_000);
 }
 
 function AnalyticsDashboard() {
@@ -179,6 +135,7 @@ function AnalyticsDashboard() {
   const [view, setView] = useState<"day" | "week">("day");
   const [loadingOrganizations, setLoadingOrganizations] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -220,6 +177,47 @@ function AnalyticsDashboard() {
       });
     return () => controller.abort();
   }, [organizationId, tError]);
+
+  async function downloadExport(format: "csv" | "pdf") {
+    if (!organizationId) return;
+    setExporting(format);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ format, lang });
+      const response = await fetch(
+        `/api/organizations/${organizationId}/analytics/export?${params.toString()}`,
+        { credentials: "same-origin" },
+      );
+      if (!response.ok) {
+        let code = "INTERNAL";
+        try {
+          code = ((await response.json()) as { error?: { code?: string } })?.error?.code ?? code;
+        } catch {
+          code = "INTERNAL";
+        }
+        throw new ApiError(code, t("analytics.exportFailed"), response.status);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const fileName = match?.[1] ?? `filazero-analytics.${format}`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      window.setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }, 1_000);
+    } catch (caught) {
+      setError(tError(caught));
+    } finally {
+      setExporting(null);
+    }
+  }
 
   const organizationName = organizations.find((organization) => organization.id === organizationId)?.name ?? "";
   const locale = lang === "pt" ? "pt-PT" : "en-GB";
@@ -267,26 +265,21 @@ function AnalyticsDashboard() {
               </p>
             </div>
             <div className="row analytics-actions no-print">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadCsv(data, organizationName, {
-                organization: t("analytics.organization"),
-                periodFrom: t("analytics.periodFrom"),
-                periodTo: t("analytics.periodTo"),
-                daily: t("analytics.daily"),
-                weekly: t("analytics.weekly"),
-                date: t("analytics.date"),
-                weekStart: t("analytics.weekStart"),
-                tickets: t("analytics.tickets"),
-                queue: t("analytics.queue"),
-                branch: t("analytics.branch"),
-                completed: t("analytics.completed"),
-                averageWait: t("analytics.averageWait"),
-                averageService: t("analytics.averageService"),
-                hour: t("analytics.hour"),
-              })}>
-                {t("analytics.exportCsv")}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => void downloadExport("csv")}
+                disabled={exporting !== null}
+              >
+                {exporting === "csv" ? t("common.loading") : t("analytics.exportCsv")}
               </button>
-              <button type="button" className="btn btn-primary btn-sm" onClick={printAnalyticsReport}>
-                {t("analytics.exportPdf")}
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => void downloadExport("pdf")}
+                disabled={exporting !== null}
+              >
+                {exporting === "pdf" ? t("common.loading") : t("analytics.exportPdf")}
               </button>
             </div>
           </div>
@@ -294,8 +287,24 @@ function AnalyticsDashboard() {
           <div className="kpi-grid">
             <StatCard label={t("analytics.ticketsIssued")} value={data.totals.issuedTickets} tone="info" />
             <StatCard label={t("analytics.ticketsCompleted")} value={data.totals.completedTickets} tone="ok" />
-            <StatCard label={t("analytics.queuesReported")} value={data.queuePerformance.length} tone="info" />
+            <StatCard label={t("analytics.completionRate")} value={formatRate(data.totals.completionRateBps, locale)} tone="ok" />
+            <StatCard label={t("analytics.cancelled")} value={data.totals.cancelledTickets} tone="info" />
+            <StatCard label={t("analytics.noShow")} value={data.totals.noShowTickets} tone="info" />
+            <StatCard label={t("analytics.averageWaitOverall")} value={formatDuration(data.totals.averageWaitSeconds, locale, "—")} tone="info" />
           </div>
+
+          <Card title={t("analytics.peak")}>
+            <div className="row" style={{ gap: "1.5rem", flexWrap: "wrap" }}>
+              <p className="muted">
+                {t("analytics.busiestDay")}:{" "}
+                <strong>{data.peak.busiestDay ? `${data.peak.busiestDay.date} (${data.peak.busiestDay.count})` : "—"}</strong>
+              </p>
+              <p className="muted">
+                {t("analytics.busiestHour")}:{" "}
+                <strong>{data.peak.busiestHour ? `${String(data.peak.busiestHour.hour).padStart(2, "0")}h (${data.peak.busiestHour.count})` : "—"}</strong>
+              </p>
+            </div>
+          </Card>
 
           <Card title={view === "day" ? t("analytics.issuedByDay") : t("analytics.issuedByWeek")}>
             <div className="analytics-segment no-print" role="group" aria-label={t("analytics.periodView")}>
@@ -309,6 +318,35 @@ function AnalyticsDashboard() {
                 showEvery={view === "day" ? 5 : 1}
               />
             ) : <EmptyState>{t("analytics.noData")}</EmptyState>}
+          </Card>
+
+          <Card title={t("analytics.branchPerformance")}>
+            {data.branchPerformance.length === 0 ? (
+              <EmptyState>{t("analytics.noData")}</EmptyState>
+            ) : (
+              <div className="analytics-table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{t("analytics.branch")}</th>
+                      <th className="nums">{t("analytics.completed")}</th>
+                      <th className="nums">{t("analytics.averageWait")}</th>
+                      <th className="nums">{t("analytics.averageService")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.branchPerformance.map((branch) => (
+                      <tr key={branch.branchId}>
+                        <td>{branch.branchName}</td>
+                        <td className="nums">{branch.completedTickets}</td>
+                        <td className="nums">{formatDuration(branch.averageWaitSeconds, locale, "—")}</td>
+                        <td className="nums">{formatDuration(branch.averageServiceSeconds, locale, "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
 
           <Card title={t("analytics.queuePerformance")}>
@@ -332,14 +370,35 @@ function AnalyticsDashboard() {
                         <td>{queue.branchName}</td>
                         <td>{queue.queueName}</td>
                         <td className="nums">{queue.completedTickets}</td>
-                        <td className="nums">{formatDuration(queue.averageWaitSeconds, locale)}</td>
-                        <td className="nums">{formatDuration(queue.averageServiceSeconds, locale)}</td>
+                        <td className="nums">{formatDuration(queue.averageWaitSeconds, locale, "—")}</td>
+                        <td className="nums">{formatDuration(queue.averageServiceSeconds, locale, "—")}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+          </Card>
+
+          <Card title={t("analytics.statusDistribution")}>
+            <div className="analytics-table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t("analytics.status")}</th>
+                    <th className="nums">{t("analytics.tickets")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.statusDistribution.map((entry) => (
+                    <tr key={entry.status}>
+                      <td>{t(`analytics.status.${entry.status}`)}</td>
+                      <td className="nums">{entry.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
 
           <Card title={t("analytics.completedByHour")}>

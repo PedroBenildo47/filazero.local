@@ -37,6 +37,7 @@ export async function runPlatformSecuritySuite(options: {
       data: {
         organizationId: organizationAId,
         branchId: branch.id,
+        publicCode: `S${Math.random().toString(36).slice(2, 9)}`.toUpperCase(),
         name: `Private Queue ${Date.now()}`,
         status: "OPEN",
       },

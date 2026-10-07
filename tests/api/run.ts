@@ -19,6 +19,7 @@ import { runEmailSuite } from "./email.spec";
 import { runOrganizationRegistrationSuite } from "./organization-registration.spec";
 import { runAnalyticsSuite } from "./analytics.spec";
 import { runPlatformSecuritySuite } from "./platform-security.spec";
+import { runPlatformAdminSuite } from "./platform-admin.spec";
 
 const BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
 const PASSWORD = "Password123!";
@@ -855,6 +856,7 @@ async function main() {
   await runOrganizationRegistrationSuite({ baseUrl: BASE_URL, reporter });
   await runAnalyticsSuite({ baseUrl: BASE_URL, reporter });
   await runPlatformSecuritySuite({ baseUrl: BASE_URL, reporter });
+  await runPlatformAdminSuite({ baseUrl: BASE_URL, reporter });
 
   /* Frontend smoke (Phase 8 + i18n default)                             */
   /* ------------------------------------------------------------------ */

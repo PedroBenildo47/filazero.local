@@ -158,15 +158,16 @@ para a equipa financeira. Só o webhook assinado pode passar a `SUCCEEDED`
 
 ### 8.3 Fatura e recibo automático
 
-- Ao passar a `SUCCEEDED`, é atribuído um número **sequencial** por ano
-  (`FT/2026/000123`), a partir do contador atómico `billing_counters` — só
-  pagamentos reais consomem números, pelo que não há lacunas.
+- Ao passar a `SUCCEEDED`, é emitido o documento fiscal numa **série oficial por
+  organização/ano** (`FR{ano}/{sequência}`, ex. `FR2026/000001`); só pagamentos
+  reais consomem números, pelo que não há lacunas. Ver a secção 9 (AGT).
 - O **recibo** é enviado automaticamente por email para o email da organização
-  (ou, na sua falta, para o primeiro gestor). O envio acontece **depois** de o
-  pagamento estar comprometido (SMTP nunca faz rollback de dinheiro) e é
-  idempotente via `receipt_sent_at`.
-- `GET /api/organizations/{id}/invoices` lista o histórico de faturas pagas e
-  `GET .../invoices/{transactionId}` devolve a fatura detalhada para impressão.
+  (ou, na sua falta, para o primeiro gestor), com a **fatura PDF anexada**. O
+  envio acontece **depois** de o pagamento estar comprometido (SMTP nunca faz
+  rollback de dinheiro) e é idempotente via `receipt_sent_at`.
+- `GET /api/organizations/{id}/invoices` lista o histórico de faturas pagas,
+  `GET .../invoices/{transactionId}` devolve a fatura detalhada e
+  `GET .../invoices/{transactionId}/pdf` devolve a fatura fiscal em PDF.
 
 ### 8.4 Migração e testes
 
@@ -185,3 +186,61 @@ recibo em PT/EN).
 Express (chamada REST real) **não foi exercitado** neste sandbox por não existir
 credencial de PSP. O caminho por referência + webhook é integralmente funcional e
 testado.
+
+---
+
+## 9. Faturas PDF e conformidade AGT (Fase 4, Bloco 1)
+
+O documento fiscal é emitido **no momento em que o webhook confirma o
+pagamento**, dentro da mesma transação de base de dados que marca a transação
+como `SUCCEEDED` — nunca antes.
+
+### 9.1 Série e numeração oficiais
+
+- `model InvoiceSeries` — uma série por `(organização, tipo de documento, ano)`.
+  O código é `{tipo}{ano}` (ex. `FR2026`) e a numeração é atómica
+  (`next_number`), pelo que pagamentos simultâneos nunca repetem um número.
+- Número oficial: `FR2026/000001` (6 dígitos). A unicidade é garantida por
+  `@@unique([seriesId, sequence])` — o número é único **dentro da série**, não
+  globalmente, porque cada contribuinte tem a sua própria série.
+- O tipo por omissão é `FR` (**Factura-Recibo**), o documento adequado a
+  pagamento imediato.
+
+### 9.2 IVA e totais
+
+- Os preços dos planos (`amountCents`) são **com IVA incluído** (bruto).
+- `vatBreakdown(grossCents, rateBps)` deriva a base tributável e o IVA com
+  arredondamento a cêntimo: `base = round(bruto × 10000 / (10000 + taxa))`.
+- Taxa padrão: **14%** (`IVA_RATE_BPS=1400`). Base, IVA e total ficam gravados na
+  transação (`subtotal_cents`, `vat_cents`, `vat_rate_bps`).
+
+### 9.3 NIF
+
+- `Organization.taxId` (NIF do cliente) é editável no painel do gestor e aceita
+  9 ou 10 dígitos (normalizado: espaços/pontos/hífenes removidos).
+- O NIF indicado no checkout (`taxId`) tem precedência sobre o da organização.
+- O NIF do emitente vem de `PLATFORM_TAX_ID`.
+
+### 9.4 Hash, QR e certificação
+
+- A string canónica (`buildInvoiceCanonical`) junta emitente, cliente, tipo,
+  série, sequência, data, base, IVA, total, moeda e os **4 primeiros caracteres do
+  hash do documento anterior** (encadeamento).
+- `signInvoice` assina com **RSA-SHA256** quando `AGT_PRIVATE_KEY` (PEM) está
+  definido — nesse caso `agt_certified = true`. Sem certificado, usa um
+  **HMAC-SHA256** determinístico (`AGT_HASH_SECRET`) e marca o documento como
+  **não certificado**.
+- O PDF A4 (`pdf-lib` + `qrcode`) imprime todos os campos legais, o QR com o
+  payload pipe-separated e a nota de certificação. **Limitação honesta:** uma
+  assinatura *certificada pela AGT* exige o certificado de software emitido pela
+  AGT; sem essa chave o documento é válido como fatura, mas é marcado como não
+  certificado.
+
+### 9.5 Migração e testes
+
+Migrações `0008_invoicing_agt` (enum `InvoiceDocumentType`, `organizations.tax_id`,
+`invoice_series`, campos fiscais em `transactions`) e `0009_invoice_number_per_series`
+(unicidade por série). A suite `tests/api/invoicing-agt.spec.ts` cobre a rejeição
+de NIF inválido, o formato da série, o cálculo do IVA, o NIF do cliente e do
+emitente, o hash e o QR, o avanço da série e o download do PDF (com isolamento de
+tenant). `tests/unit/agt.test.ts` cobre as regras puras.

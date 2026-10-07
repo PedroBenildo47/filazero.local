@@ -5,8 +5,8 @@
  * Every handler that touches tenant data receives this context and must scope
  * its queries through `assertOrganizationAccess` / `assertBranchAccess`.
  *
- * These helpers are the guard against cross-organization data access: a STAFF
- * of organization A must not read organization B's data by changing an ID.
+ * These helpers guard cross-organization access. Platform administrators do
+ * not receive an organization-scoped bypass.
  */
 import type { UserRole, MemberStatus } from "@prisma/client";
 import { AppError } from "@/lib/errors";
@@ -43,15 +43,11 @@ function activeMemberships(ctx: AuthContext, organizationId: string) {
   );
 }
 
-/**
- * Adminstrators have global access. Everyone else must hold an active
- * membership for the organization.
- */
 export function assertOrganizationAccess(
   ctx: AuthContext,
   organizationId: string,
 ): void {
-  if (ctx.user.role === "ADMINISTRATOR") return;
+  if (ctx.user.role === "ADMINISTRATOR") throw AppError.forbidden();
   if (activeMemberships(ctx, organizationId).length === 0) {
     throw AppError.forbidden();
   }
@@ -66,7 +62,7 @@ export function assertBranchAccess(
   organizationId: string,
   branchId: string,
 ): void {
-  if (ctx.user.role === "ADMINISTRATOR") return;
+  if (ctx.user.role === "ADMINISTRATOR") throw AppError.forbidden();
 
   const memberships = activeMemberships(ctx, organizationId);
   const allowed = memberships.some(
@@ -77,13 +73,13 @@ export function assertBranchAccess(
   }
 }
 
-/** True when the caller holds one of `roles` inside the organization (or is admin). */
+/** True when the caller holds one of `roles` inside the organization. */
 export function hasOrganizationRole(
   ctx: AuthContext,
   organizationId: string,
   roles: readonly UserRole[],
 ): boolean {
-  if (ctx.user.role === "ADMINISTRATOR") return true;
+  if (ctx.user.role === "ADMINISTRATOR") return false;
   return activeMemberships(ctx, organizationId).some((m) =>
     roles.includes(m.role),
   );
@@ -102,7 +98,7 @@ export function assertOrganizationRole(
 
 /**
  * Guard for organization-management operations (branches, queues, members).
- * Allowed for a MANAGER of the organization or a platform ADMINISTRATOR.
+ * Allowed only for a MANAGER with an active organization membership.
  */
 export function assertManagerOfOrganization(
   ctx: AuthContext,

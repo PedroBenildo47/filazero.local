@@ -73,3 +73,7 @@ test("password recovery is the most restricted scope", () => {
   assert.ok(RATE_LIMITS.passwordForgot.identity);
   assert.ok(RATE_LIMITS.passwordForgot.identity.max <= 5);
 });
+
+test("organization registration is limited more tightly than customer registration", () => {
+  assert.ok(RATE_LIMITS.organizationRegister.ip.max < RATE_LIMITS.register.ip.max);
+});

@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertCan, can, permissionsFor, PERMISSIONS, isOrganizationRole } from "@/server/rbac";
+import {
+  assertBranchAccess,
+  assertOrganizationAccess,
+  assertOrganizationRole,
+} from "@/server/context";
 import { AppError } from "@/lib/errors";
 import type { UserRole } from "@prisma/client";
 
@@ -15,10 +20,53 @@ test("every role has a permission set with no unknown permission", () => {
   }
 });
 
-test("ADMINISTRATOR holds every permission", () => {
-  for (const permission of PERMISSIONS) {
-    assert.equal(can("ADMINISTRATOR", permission), true, permission);
+test("ADMINISTRATOR has platform controls but no operational permissions", () => {
+  assert.equal(can("ADMINISTRATOR", "organization:manage"), true);
+  assert.equal(can("ADMINISTRATOR", "platform:admin"), true);
+  for (const permission of [
+    "queue:read",
+    "ticket:join",
+    "ticket:read:self",
+    "ticket:read:organization",
+    "ticket:call",
+    "ticket:complete",
+    "notification:read:self",
+    "branch:read:organization",
+    "branch:manage",
+    "queue:manage",
+    "member:manage",
+    "billing:read",
+    "billing:manage",
+    "user:manage",
+    "audit:read",
+  ] as const) {
+    assert.equal(can("ADMINISTRATOR", permission), false, permission);
   }
+});
+
+test("ADMINISTRATOR cannot use organization guards with an accidental membership", () => {
+  const context = {
+    user: {
+      id: "admin",
+      name: "Admin",
+      email: "admin@example.test",
+      role: "ADMINISTRATOR" as const,
+    },
+    memberships: [
+      {
+        organizationId: "org-a",
+        branchId: null,
+        role: "MANAGER" as const,
+        status: "ACTIVE" as const,
+      },
+    ],
+  };
+  const forbidden = (error: unknown) =>
+    error instanceof AppError && error.code === "FORBIDDEN";
+
+  assert.throws(() => assertOrganizationAccess(context, "org-a"), forbidden);
+  assert.throws(() => assertBranchAccess(context, "org-a", "branch-a"), forbidden);
+  assert.throws(() => assertOrganizationRole(context, "org-a", ["MANAGER"]), forbidden);
 });
 
 test("CUSTOMER cannot perform staff or management actions", () => {

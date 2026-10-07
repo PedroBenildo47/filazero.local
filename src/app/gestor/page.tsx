@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api-client";
+import { QRCodeSVG } from "qrcode.react";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
@@ -116,6 +118,7 @@ function ManagerDashboard() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
+  const [queueQr, setQueueQr] = useState<{ name: string; url: string } | null>(null);
 
   const [orgForm, setOrgForm] = useState({ name: "", category: "", city: "" });
   const [branchForm, setBranchForm] = useState({ name: "", address: "", city: "" });
@@ -245,6 +248,19 @@ function ManagerDashboard() {
     }
   }
 
+  function downloadQueueQr() {
+    const svg = document.getElementById("queue-qr-code");
+    if (!svg || !queueQr) return;
+    const file = new Blob([new XMLSerializer().serializeToString(svg)], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(file);
+    link.download = `filazero-${queueQr.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   if (loading) {
     return (
       <main className="container">
@@ -255,8 +271,15 @@ function ManagerDashboard() {
 
   return (
     <main className="container animate-in">
-      <h1>{t("manager.title")}</h1>
-      <p className="muted">{t("manager.subtitle")}</p>
+      <div className="row spread manager-heading">
+        <div>
+          <h1>{t("manager.title")}</h1>
+          <p className="muted">{t("manager.subtitle")}</p>
+        </div>
+        <Link href="/gestor/analytics" className="btn btn-ghost">
+          {t("manager.analytics")}
+        </Link>
+      </div>
       {error && <Alert kind="error">{error}</Alert>}
       {notice && <Alert kind="success">{notice}</Alert>}
 
@@ -604,6 +627,18 @@ function ManagerDashboard() {
                       </td>
                       <td>
                         <div className="row">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() =>
+                              setQueueQr({
+                                name: queue.name,
+                                url: `${window.location.origin}/fila/${queue.id}`,
+                              })
+                            }
+                          >
+                            {t("manager.generateQr")}
+                          </button>
                           {(["OPEN", "PAUSED", "CLOSED"] as const)
                             .filter((status) => status !== queue.status)
                             .map((status) => (
@@ -683,6 +718,34 @@ function ManagerDashboard() {
               </div>
             )}
           </Card>
+
+          {queueQr && (
+            <div className="qr-overlay" onClick={() => setQueueQr(null)}>
+              <section
+                className="qr-print-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="queue-qr-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h2 id="queue-qr-title">{queueQr.name}</h2>
+                <p className="muted">{t("manager.qrDescription")}</p>
+                <QRCodeSVG id="queue-qr-code" value={queueQr.url} size={256} level="H" />
+                <p className="mono qr-url">{queueQr.url}</p>
+                <div className="row qr-actions">
+                  <button type="button" className="btn btn-primary" onClick={downloadQueueQr}>
+                    {t("manager.downloadQr")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => window.print()}>
+                    {t("manager.printQr")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setQueueQr(null)}>
+                    {t("common.close")}
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
 
           <Card title={t("manager.members")}>
             {members.length === 0 ? (
@@ -858,7 +921,7 @@ function ManagerDashboard() {
 
 export default function ManagerPage() {
   return (
-    <RequireAuth roles={["MANAGER", "ADMINISTRATOR"]}>
+    <RequireAuth roles={["MANAGER"]}>
       <ManagerDashboard />
     </RequireAuth>
   );

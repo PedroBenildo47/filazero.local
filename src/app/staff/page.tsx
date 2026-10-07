@@ -449,7 +449,7 @@ function StaffDashboard() {
 
 export default function StaffPage() {
   return (
-    <RequireAuth roles={["STAFF", "MANAGER", "ADMINISTRATOR"]}>
+    <RequireAuth roles={["STAFF", "MANAGER"]}>
       <StaffDashboard />
     </RequireAuth>
   );

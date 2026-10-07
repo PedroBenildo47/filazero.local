@@ -80,6 +80,13 @@ enum NotificationType {
   QUEUE_STATUS_CHANGED
 }
 
+enum OrganizationDocumentType {
+  COMPANY_REGISTRATION
+  TAX_REGISTRATION
+  BANKING_LICENSE
+  REGULATOR_AUTHORIZATION
+}
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
@@ -165,12 +172,31 @@ model Organization {
   queues       Queue[]
   subscription Subscription?
   transactions Transaction[]
+  documents    OrganizationDocument[]
 
   @@index([status])
   @@index([city])
   @@index([category])
   @@index([name])
   @@map("organizations")
+}
+
+model OrganizationDocument {
+  id             String                   @id @default(uuid()) @db.Uuid
+  organizationId String                   @map("organization_id") @db.Uuid
+  type           OrganizationDocumentType
+  fileName       String                   @map("file_name") @db.VarChar(255)
+  mimeType       String                   @map("mime_type") @db.VarChar(100)
+  sizeBytes      Int                      @map("size_bytes")
+  sha256         String                   @db.Char(64)
+  content        Bytes                    @db.ByteA
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type])
+  @@index([organizationId, createdAt])
+  @@map("organization_documents")
 }
 
 model Branch {

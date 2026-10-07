@@ -69,7 +69,10 @@ const MANAGER_PERMISSIONS: Permission[] = [
   "billing:manage",
 ];
 
-const ADMINISTRATOR_PERMISSIONS: Permission[] = [...PERMISSIONS];
+const ADMINISTRATOR_PERMISSIONS: Permission[] = [
+  "organization:manage",
+  "platform:admin",
+];
 
 const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
   CUSTOMER: new Set(CUSTOMER_PERMISSIONS),

@@ -22,6 +22,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "test:unit": "node --conditions=react-server --import tsx --test tests/unit/*.test.ts",
     "test:api": "node --conditions=react-server --import tsx tests/api/run.ts",
+    "test:api:security": "node --conditions=react-server --import tsx tests/api/run-platform-security.ts",
     "test:integration": "cross-env NODE_OPTIONS=--conditions=react-server tsx tests/integration/phases-3-6.test.ts",
     "test:api:with-server": "bash scripts/run-api-tests.sh",
     "postinstall": "prisma generate"
@@ -35,6 +36,7 @@
     "next": "^15.1.6",
     "nodemailer": "^6.9.16",
     "pino": "^9.6.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",

@@ -27,17 +27,22 @@ export class ApiError extends Error {
 export interface ApiRequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   json?: unknown;
+  formData?: FormData;
   signal?: AbortSignal;
 }
 
 export async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = "GET", json, signal } = options;
+  const { method = "GET", json, formData, signal } = options;
+
+  if (json !== undefined && formData !== undefined) {
+    throw new Error("An API request cannot send JSON and FormData together");
+  }
 
   const response = await fetch(path, {
     method,
     credentials: "same-origin",
     headers: json === undefined ? undefined : { "Content-Type": "application/json" },
-    body: json === undefined ? undefined : JSON.stringify(json),
+    body: formData ?? (json === undefined ? undefined : JSON.stringify(json)),
     signal,
     cache: "no-store",
   });

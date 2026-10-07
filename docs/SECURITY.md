@@ -76,8 +76,17 @@ nonce é o passo seguinte.
 ## 5. Autorização e multi-tenancy
 
 - Permissões por papel numa única fonte (`src/server/rbac.ts`).
-- `assertOrganizationAccess` / `assertBranchAccess` em cada operação de tenant —
-  mudar um ID no pedido não dá acesso a outra organização.
+- `ADMINISTRATOR` só tem permissões de plataforma (`organization:manage` e
+  `platform:admin`); não herda permissões de cliente, staff, gestor ou billing.
+- `assertOrganizationAccess` / `assertBranchAccess` exigem vínculo ativo e
+  nunca têm bypass global para administradores.
+- `GET /api/admin/metrics` devolve apenas contagens agregadas globais. A API não
+  expõe listagens de organizações/utilizadores para o Admin.
+- Filiais, membros, subscrições, transações, estado de filas, tickets, histórico
+  e SSE exigem autorização operacional de organização/filial; pedidos do
+  `ADMINISTRATOR` são negados no servidor (`403`).
+- Os diretórios e estados de fila explicitamente públicos continuam públicos
+  para clientes e não concedem ao Admin acesso às rotas internas.
 - Erros nunca expõem stack traces; detalhes técnicos vão para o log com redacção
   de `password`, `token`, `authorization` e cookies.
 
@@ -92,5 +101,5 @@ nonce é o passo seguinte.
 
 Os testes HTTP cobrem: cabeçalhos em API e HTML, pré-voos permitidos e
 recusados, origem desconhecida → 403, `Vary: Origin`, limites por conta, 
-`Retry-After`, isolamento entre contas e o facto de outras contas continuarem a
-funcionar. Ver [VALIDATION.md](./VALIDATION.md).
+`Retry-After`, isolamento entre contas, métricas agregadas de plataforma e
+negação ao Admin das rotas operacionais. Ver [VALIDATION.md](./VALIDATION.md).

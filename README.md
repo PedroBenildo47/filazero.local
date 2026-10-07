@@ -60,6 +60,11 @@ automatizadas.
 ## Configuração
 
 ```bash
+git status
+# 0. Isto vai mostrar-lhe exatamente quais os ficheiros que foram modificados ou criados pela última versão que descarregou do creao.ai.
+
+docker compose up -d
+# 0.Para testar o backend e a base de dados que já foram validadas, ligue os contentores:
 # 1. instalar dependências
 npm install
 

@@ -5,11 +5,9 @@
  */
 import Link from "next/link";
 import { useI18n } from "@/components/LanguageProvider";
-import { useSession } from "@/components/SessionProvider";
 
 export default function HomePage() {
   const { t } = useI18n();
-  const { user } = useSession();
 
   const steps = [
     t("landing.step1"),
@@ -42,24 +40,13 @@ export default function HomePage() {
         </span>
         <h1>{t("landing.title")}</h1>
         <p>{t("landing.subtitle")}</p>
-        <div className="row">
+        <div className="row landing-actions">
           <Link href="/pesquisar" className="btn btn-primary btn-lg">
-            {t("landing.ctaSearch")}
+            {t("landing.ctaCustomer")}
           </Link>
-          {user ? (
-            <Link href="/conta" className="btn btn-ghost btn-lg">
-              {t("nav.account")}
-            </Link>
-          ) : (
-            <>
-              <Link href="/registar" className="btn btn-ghost btn-lg">
-                {t("landing.ctaRegister")}
-              </Link>
-              <Link href="/login" className="btn btn-ghost btn-lg">
-                {t("landing.ctaLogin")}
-              </Link>
-            </>
-          )}
+          <Link href="/registar-organizacao" className="btn btn-ghost btn-lg">
+            {t("landing.ctaOrganization")}
+          </Link>
         </div>
       </section>
 

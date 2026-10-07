@@ -11,6 +11,7 @@ import { buildSignatureHeader } from "@/server/billing/signature";
 import {
   createAdmin,
   createUser,
+  loginUser,
   type Reporter,
 } from "./support";
 
@@ -101,7 +102,14 @@ export async function runBillingSuite(options: {
   );
   const organizationId = organization.data!.id;
 
-  const overview = await admin.client.get<BillingDto>(
+  const managerUser = await createUser(baseUrl, "billing-manager", "ManagerPass123!");
+  await db.user.update({ where: { id: managerUser.userId }, data: { role: "MANAGER" } });
+  await db.organizationMember.create({
+    data: { userId: managerUser.userId, organizationId, role: "MANAGER" },
+  });
+  const billingManager = await loginUser(baseUrl, managerUser.email, "ManagerPass123!");
+
+  const overview = await billingManager.client.get<BillingDto>(
     `/api/organizations/${organizationId}/subscription`,
   );
   reporter.equal(
@@ -133,7 +141,7 @@ export async function runBillingSuite(options: {
 
   /* ----------------------------- checkout ------------------------------- */
 
-  const checkout = await admin.client.post<CheckoutDto>("/api/billing/checkout", {
+  const checkout = await billingManager.client.post<CheckoutDto>("/api/billing/checkout", {
     organizationId,
     planId: starterPlan.id,
   });
@@ -260,7 +268,7 @@ export async function runBillingSuite(options: {
   );
   reporter.equal("billing: the first application is not a duplicate", paid.data?.duplicate, false);
 
-  const afterPayment = await admin.client.get<BillingDto>(
+  const afterPayment = await billingManager.client.get<BillingDto>(
     `/api/organizations/${organizationId}/subscription`,
   );
   reporter.equal(
@@ -279,7 +287,7 @@ export async function runBillingSuite(options: {
     },
   );
   reporter.equal("billing: a replayed webhook is idempotent", replay.data?.duplicate, true);
-  const afterReplay = await admin.client.get<BillingDto>(
+  const afterReplay = await billingManager.client.get<BillingDto>(
     `/api/organizations/${organizationId}/subscription`,
   );
   reporter.equal(
@@ -314,7 +322,7 @@ export async function runBillingSuite(options: {
 
   reporter.errorCode(
     "billing: an expired subscription blocks branch creation",
-    await admin.client.post(`/api/organizations/${organizationId}/branches`, {
+    await billingManager.client.post(`/api/organizations/${organizationId}/branches`, {
       name: "Bloqueada",
     }),
     402,
@@ -330,7 +338,7 @@ export async function runBillingSuite(options: {
     where: { organizationId },
     data: { status: "TRIALING", currentPeriodEnd: new Date(Date.now() + 86_400_000) },
   });
-  const allowedBranch = await admin.client.post<{ id: string }>(
+  const allowedBranch = await billingManager.client.post<{ id: string }>(
     `/api/organizations/${organizationId}/branches`,
     { name: "Permitida" },
   );
@@ -353,7 +361,7 @@ export async function runBillingSuite(options: {
   );
   reporter.errorCode(
     "billing: a free plan cannot be checked out",
-    await admin.client.post("/api/billing/checkout", {
+    await billingManager.client.post("/api/billing/checkout", {
       organizationId,
       planId: trialPlan.id,
     }),
@@ -367,7 +375,7 @@ export async function runBillingSuite(options: {
   );
   reporter.errorCode(
     "billing: exceeding the branch quota is blocked",
-    await admin.client.post(`/api/organizations/${organizationId}/branches`, {
+    await billingManager.client.post(`/api/organizations/${organizationId}/branches`, {
       name: "Excedente",
     }),
     403,
@@ -378,7 +386,7 @@ export async function runBillingSuite(options: {
   reporter.equal(
     "billing: the first queue fits the quota",
     (
-      await admin.client.post(`/api/branches/${branchForQuota}/queues`, {
+      await billingManager.client.post(`/api/branches/${branchForQuota}/queues`, {
         name: "Fila 1",
         status: "OPEN",
       })
@@ -387,7 +395,7 @@ export async function runBillingSuite(options: {
   );
   reporter.errorCode(
     "billing: exceeding the queue quota is blocked",
-    await admin.client.post(`/api/branches/${branchForQuota}/queues`, {
+    await billingManager.client.post(`/api/branches/${branchForQuota}/queues`, {
       name: "Fila 2",
       status: "OPEN",
     }),
@@ -395,7 +403,7 @@ export async function runBillingSuite(options: {
     "QUOTA_EXCEEDED",
   );
 
-  const history = await admin.client.get<{ items: unknown[] }>(
+  const history = await billingManager.client.get<{ items: unknown[] }>(
     `/api/organizations/${organizationId}/transactions`,
   );
   reporter.check(

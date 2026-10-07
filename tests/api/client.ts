@@ -16,6 +16,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Extra request headers (e.g. `Origin` for the CORS tests). */
   headers?: Record<string, string>;
+  /** Multipart fields; fetch supplies the boundary content type. */
+  formData?: FormData;
   /**
    * Sends this exact string as the body (no re-serialisation). Required when the
    * bytes are signed, e.g. the payment webhook.
@@ -64,9 +66,11 @@ export class ApiClient {
     const requestBody =
       options.rawBody !== undefined
         ? options.rawBody
-        : options.json === undefined
-          ? undefined
-          : JSON.stringify(options.json);
+        : options.formData !== undefined
+          ? options.formData
+          : options.json === undefined
+            ? undefined
+            : JSON.stringify(options.json);
 
     const response = await fetch(new URL(path, this.baseUrl), {
       method: options.method ?? "GET",
@@ -99,6 +103,9 @@ export class ApiClient {
   }
   post<T>(path: string, json?: unknown) {
     return this.request<T>(path, { method: "POST", json });
+  }
+  postForm<T>(path: string, formData: FormData) {
+    return this.request<T>(path, { method: "POST", formData });
   }
   patch<T>(path: string, json?: unknown) {
     return this.request<T>(path, { method: "PATCH", json });

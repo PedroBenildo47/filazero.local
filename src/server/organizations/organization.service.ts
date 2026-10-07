@@ -3,8 +3,8 @@
  *
  * Write operations are restricted to a platform ADMINISTRATOR (create/status) or
  * a MANAGER of the organization (update/operational data). Reads are scoped:
- * administrators see everything, everyone else only organizations where they
- * hold an active membership.
+ * platform administrators can create and change status, but cannot enumerate
+ * organizations or read organization-scoped data.
  */
 import "server-only";
 import type { OrganizationStatus } from "@prisma/client";
@@ -71,14 +71,14 @@ export async function listOrganizations(
   ctx: AuthContext,
   pagination: Pagination & { status?: OrganizationStatus },
 ) {
+  if (ctx.user.role === "ADMINISTRATOR") throw AppError.forbidden();
   const { skip, take } = paginationToSkipTake(pagination);
-  const isAdmin = ctx.user.role === "ADMINISTRATOR";
   const organizationIds = ctx.memberships
     .filter((membership) => membership.status === "ACTIVE")
     .map((membership) => membership.organizationId);
 
   const where = {
-    ...(isAdmin ? {} : { id: { in: organizationIds } }),
+    id: { in: organizationIds },
     ...(pagination.status ? { status: pagination.status } : {}),
   };
 
@@ -195,5 +195,5 @@ export async function setOrganizationStatus(
     userAgent: meta.userAgent,
   });
 
-  return publicOrganization(organization);
+  return { id: organization.id, status: organization.status };
 }

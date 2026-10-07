@@ -14,6 +14,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { route } from "@/lib/http";
 import { requireAuth } from "@/server/auth/session-cookie";
+import { assertBranchAccess, assertOrganizationAccess, requirePermission } from "@/server/context";
 import { loadQueueScope } from "@/server/queues/queue.service";
 import { subscribeToQueueEvents, type QueueEvent } from "@/server/realtime/bus";
 
@@ -33,11 +34,14 @@ function sseChunk(event: string, data: unknown, id?: string): string {
 }
 
 export const GET = route(async (request, context: Context) => {
-  await requireAuth();
+  const auth = await requireAuth();
   const { queueId } = await context.params;
+  requirePermission(auth, "ticket:read:organization");
 
   // 404 for unknown queues before opening the stream.
-  await loadQueueScope(queueId);
+  const scope = await loadQueueScope(queueId);
+  assertOrganizationAccess(auth, scope.organizationId);
+  assertBranchAccess(auth, scope.organizationId, scope.branchId);
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;

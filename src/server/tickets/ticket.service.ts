@@ -277,6 +277,7 @@ export async function joinQueue(
 
 /** The customer's current active ticket, with a freshly computed position. */
 export async function getMyActiveTicket(ctx: AuthContext) {
+  requirePermission(ctx, "ticket:read:self");
   const ticket = await db.ticket.findFirst({
     where: { userId: ctx.user.id, status: { in: ACTIVE_TICKET_STATUSES } },
     orderBy: { joinedAt: "asc" },
@@ -322,6 +323,7 @@ export async function listMyTickets(
   ctx: AuthContext,
   pagination: Pagination & { status?: TicketStatus },
 ) {
+  requirePermission(ctx, "ticket:read:self");
   const { skip, take } = paginationToSkipTake(pagination);
   const where = {
     userId: ctx.user.id,
@@ -818,8 +820,8 @@ export async function getQueueState(
   queueId: string,
   recentLimit: number,
 ) {
-  const scope = await loadQueueScope(queueId);
   requirePermission(ctx, "ticket:read:organization");
+  const scope = await loadQueueScope(queueId);
   assertOrganizationAccess(ctx, scope.organizationId);
   assertBranchAccess(ctx, scope.organizationId, scope.branchId);
 

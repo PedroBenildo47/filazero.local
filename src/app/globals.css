@@ -222,6 +222,10 @@ a:hover {
   max-width: 440px;
 }
 
+.form-wide {
+  max-width: 900px;
+}
+
 .stack {
   display: flex;
   flex-direction: column;
@@ -531,6 +535,56 @@ a:hover {
 .form-inline {
   align-items: flex-end;
   margin: 0.75rem 0;
+}
+
+.organization-form {
+  gap: 1.5rem;
+}
+
+.form-section {
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+
+.form-section h2 {
+  margin-bottom: 0.8rem;
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.file-input {
+  padding: 0.42rem;
+  font-size: 0.82rem;
+}
+
+.file-input::file-selector-button {
+  margin-right: 0.55rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  background: var(--surface-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.upload-field > small {
+  overflow-wrap: anywhere;
+}
+
+.form-submit-row {
+  align-items: center;
 }
 
 .field {
@@ -1154,6 +1208,87 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
+.analytics-page .card {
+  margin-block: 1rem;
+}
+
+.analytics-header,
+.analytics-report-heading {
+  align-items: flex-start;
+}
+
+.analytics-organization {
+  max-width: 420px;
+  margin-block: 1rem 1.4rem;
+}
+
+.analytics-report-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.analytics-segment {
+  display: inline-flex;
+  gap: 0.2rem;
+  margin-bottom: 0.65rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.analytics-segment button {
+  border: 0;
+  border-radius: 5px;
+  padding: 0.35rem 0.65rem;
+  color: var(--fg-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.analytics-segment button.is-selected {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.analytics-chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.analytics-chart {
+  display: block;
+  width: 100%;
+  min-width: 620px;
+  height: auto;
+  overflow: visible;
+}
+
+.analytics-axis {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.analytics-axis-label {
+  fill: var(--fg-muted);
+  font-size: 10px;
+}
+
+.analytics-bar {
+  fill: var(--primary);
+}
+
+.analytics-table-wrap {
+  overflow-x: auto;
+}
+
+.analytics-table-wrap .table {
+  min-width: 620px;
+}
+
 /* -------------------------------------------------------------- queue lists */
 .queue-list,
 .queue-sublist {
@@ -1280,6 +1415,95 @@ select.input {
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.65rem;
   margin: 0.4rem 0;
+}
+
+.qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(9, 9, 11, 0.62);
+}
+
+.qr-print-card {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.5rem;
+  color: var(--fg);
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.qr-print-card h2 {
+  overflow-wrap: anywhere;
+}
+
+.qr-url {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.qr-actions {
+  justify-content: center;
+}
+
+@media print {
+  body:not(.analytics-printing) * {
+    visibility: hidden !important;
+  }
+
+  body:not(.analytics-printing) .qr-overlay,
+  body:not(.analytics-printing) .qr-print-card,
+  body:not(.analytics-printing) .qr-print-card * {
+    visibility: visible !important;
+  }
+
+  body:not(.analytics-printing) .qr-overlay {
+    position: absolute;
+    inset: 0;
+    display: block;
+    padding: 0;
+    background: #fff;
+  }
+
+  body:not(.analytics-printing) .qr-print-card {
+    width: 100%;
+    border: 0;
+    box-shadow: none;
+  }
+
+  body:not(.analytics-printing) .qr-actions {
+    display: none;
+  }
+
+  body.analytics-printing .no-print,
+  body.analytics-printing .nav,
+  body.analytics-printing .footer {
+    display: none !important;
+  }
+
+  body.analytics-printing .container {
+    max-width: none;
+    padding: 0;
+  }
+
+  body.analytics-printing .analytics-page .card {
+    break-inside: avoid;
+    border-color: #ccc;
+    box-shadow: none;
+  }
+
+  body.analytics-printing .analytics-chart {
+    min-width: 0;
+  }
 }
 
 /* ------------------------------------------------------------------- toast */
@@ -1414,6 +1638,26 @@ select.input {
 
   .container {
     padding: 1.25rem 1rem 3.5rem;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-field-wide {
+    grid-column: auto;
+  }
+
+  .analytics-report-heading {
+    flex-direction: column;
+  }
+
+  .analytics-actions {
+    width: 100%;
+  }
+
+  .analytics-actions .btn {
+    flex: 1;
   }
 
   .ticket-number {

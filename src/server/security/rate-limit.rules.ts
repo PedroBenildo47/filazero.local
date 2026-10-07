@@ -23,7 +23,12 @@ export interface RateLimitRuleSet {
 }
 
 export const RATE_LIMITS: Record<
-  "login" | "register" | "passwordForgot" | "passwordReset" | "passwordChange",
+  | "login"
+  | "register"
+  | "organizationRegister"
+  | "passwordForgot"
+  | "passwordReset"
+  | "passwordChange",
   RateLimitRuleSet
 > = {
   // Brute force: tight per account, looser per IP (shared NAT must still work).
@@ -34,6 +39,9 @@ export const RATE_LIMITS: Record<
   // Account creation: stops scripted mass registration without blocking an office.
   register: {
     ip: { windowSeconds: 3_600, max: 50 },
+  },
+  organizationRegister: {
+    ip: { windowSeconds: 3_600, max: 5 },
   },
   // Recovery: a reset email is expensive and abusable.
   passwordForgot: {

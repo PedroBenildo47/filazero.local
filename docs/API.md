@@ -56,22 +56,50 @@ inclui `resetToken` (não há provedor de email configurado — ver
 
 | Método | Rota | Permissão |
 | --- | --- | --- |
-| GET | `/api/organizations` | sessão (admin vê todas; restantes só as suas) |
+| GET | `/api/organizations` | membro ativo (apenas as próprias organizações) |
 | POST | `/api/organizations` | `organization:manage` (ADMINISTRATOR) |
-| GET | `/api/organizations/{id}` | membro da organização ou admin |
-| PATCH | `/api/organizations/{id}` | MANAGER da organização ou admin |
+| GET | `/api/organizations/{id}` | membro ativo da organização |
+| PATCH | `/api/organizations/{id}` | MANAGER da organização |
 | PATCH | `/api/organizations/{id}/status` | `platform:admin` |
 | GET | `/api/organizations/{id}/branches` | membro da organização |
-| POST | `/api/organizations/{id}/branches` | MANAGER da organização ou admin |
+| POST | `/api/organizations/{id}/branches` | MANAGER da organização |
 | GET | `/api/organizations/{id}/branches/{branchId}` | membro com acesso à filial |
-| PATCH | `/api/organizations/{id}/branches/{branchId}` | MANAGER da organização ou admin |
+| PATCH | `/api/organizations/{id}/branches/{branchId}` | MANAGER da organização |
 | GET | `/api/organizations/{id}/members` | membro da organização |
 | POST | `/api/organizations/{id}/members` | `member:manage` |
 | PATCH | `/api/organizations/{id}/members/{memberId}` | `member:manage` |
 | DELETE | `/api/organizations/{id}/members/{memberId}` | `member:manage` |
 | GET | `/api/organizations/{id}/users?q=` | `member:manage` |
+| GET | `/api/organizations/{id}/analytics` | gestor com vínculo ativo na organização |
+| GET | `/api/admin/metrics` | `platform:admin` (apenas agregados globais) |
 | GET | `/api/public/organizations?q=&city=&page=` | público |
 | GET | `/api/public/organizations/{id}` | público |
+| POST | `/api/public/organizations/register` | público, limitado por IP |
+
+`POST /api/public/organizations/register` aceita `multipart/form-data`. Envie os
+campos de texto `ownerName`, `ownerEmail`, `ownerPhone`, `password`,
+`organizationName`, `category`, `description`, `address`, `city`, `country`,
+`organizationPhone` e `organizationEmail`. Campos opcionais vazios podem ser
+omitidos. Anexe os documentos usando os campos `document.<TIPO>`:
+
+| Setor | Tipos obrigatórios |
+| --- | --- |
+| Padrão | `COMPANY_REGISTRATION`, `TAX_REGISTRATION` |
+| Categoria contendo “Banco” ou “Instituição Financeira” | Os dois anteriores, `BANKING_LICENSE` e `REGULATOR_AUTHORIZATION` |
+
+Cada documento tem limite de 8 MiB; o corpo multipart total tem limite de 34
+MiB. São aceites PDF, JPEG e PNG, conferindo a assinatura do ficheiro além do
+MIME declarado. Os bytes são armazenados na tabela privada
+`organization_documents`; esta API não disponibiliza leitura pública dos
+ficheiros. O limite é de 5 pedidos por IP/hora.
+
+Quando os campos e os documentos obrigatórios passam essas validações, a
+transação cria a conta de gestor, a organização `ACTIVE`, a associação, os
+documentos, a sessão e o trial configurado. A resposta HTTP 201 inclui a conta,
+a organização e `activated: true`. A validação automática confirma presença,
+tipo e assinatura básica do ficheiro; não confirma autenticidade jurídica das
+licenças nem executa análise antimalware. Para setores regulados, essa garantia
+mais forte exige integração com um verificador externo ou revisão manual.
 
 `POST .../members` aceita um utilizador existente ou cria uma conta nova:
 ```jsonc
@@ -80,6 +108,33 @@ inclui `resetToken` (não há provedor de email configurado — ver
 { "name": "João", "email": "joao@exemplo.ao", "password": "…", "role": "MANAGER", "branchId": null }
 ```
 `branchId: null` significa acesso a todas as filiais da organização.
+
+O papel `ADMINISTRATOR` é o dono da plataforma e não tem permissões de cliente,
+staff, gestor, faturação ou operação. Além de criar organizações e atribuir
+planos/estados, só pode consultar `/api/admin/metrics`, que devolve contagens
+globais de organizações por estado e utilizadores total/ativos; não retorna
+nomes, IDs ou listas de organizações/utilizadores. Leituras de organizações,
+filiais, membros, billing, filas, tickets, histórico e SSE exigem membership e
+role operacional, e respondem `403 FORBIDDEN` para o Super Admin.
+
+`GET /api/organizations/{id}/analytics?from=&to=&timezone=` devolve séries
+agregadas, sem dados pessoais nem identificadores de tickets. `from` é
+inclusivo, `to` é exclusivo, o intervalo padrão são os últimos 30 dias e o
+máximo é 366 dias. O fuso horário IANA predefinido é `Africa/Luanda`.
+
+- `issuedByDay` e `issuedByWeek` contam tickets por `joinedAt`, incluindo todos
+    os estados.
+- `queuePerformance` agrupa tickets concluídos no intervalo por fila; espera é
+    `joinedAt` até `servingAt`, e atendimento é `servingAt` até `completedAt`.
+    Médias sem amostras são `null`.
+- `completedByHour` contém os 24 horários locais e conta conclusões por
+    `completedAt`.
+
+A API permite apenas utilizadores com papel global `MANAGER` e vínculo ativo
+`MANAGER` nessa organização. O escopo de filial é derivado dos vínculos: um
+vínculo com `branchId: null` abrange todas as filiais; vínculos específicos
+restringem todas as agregações a essas filiais. `ADMINISTRATOR`, `STAFF` e
+gestores de outras organizações recebem `403 FORBIDDEN`.
 
 ## Filas (Fase 5)
 

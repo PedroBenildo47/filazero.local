@@ -9,11 +9,16 @@
  *
  * The only direct database access is the bootstrap that promotes a freshly
  * registered user to ADMINISTRATOR (registrations always create CUSTOMERs).
+ * Test fixtures may promote freshly registered users and attach memberships
+ * directly; request behavior itself is exercised through the public API.
  */
 import { db } from "@/lib/db";
 import { ApiClient, type ApiResult } from "./client";
 import { runBillingSuite } from "./billing.spec";
 import { runEmailSuite } from "./email.spec";
+import { runOrganizationRegistrationSuite } from "./organization-registration.spec";
+import { runAnalyticsSuite } from "./analytics.spec";
+import { runPlatformSecuritySuite } from "./platform-security.spec";
 
 const BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
 const PASSWORD = "Password123!";
@@ -266,16 +271,48 @@ async function main() {
   });
   expectStatus("admin creates organization B", orgB, 201);
 
-  // Manager A (created by the admin, with a password).
-  const managerAEmail = uniqueEmail("managerA");
-  const managerAResult = await adminCtx.client.post<{ id: string }>(
-    `/api/organizations/${orgA.data!.id}/members`,
-    { name: "Manager A", email: managerAEmail, password: STAFF_PASSWORD, role: "MANAGER" },
+  expectCode(
+    "admin cannot enumerate organization records",
+    await adminCtx.client.get("/api/organizations"),
+    403,
+    "FORBIDDEN",
   );
-  expectStatus("admin adds manager A", managerAResult, 201);
+  expectCode(
+    "admin cannot read an organization's details",
+    await adminCtx.client.get(`/api/organizations/${orgA.data!.id}`),
+    403,
+    "FORBIDDEN",
+  );
+  const platformMetrics = await adminCtx.client.get<{
+    organizations: { total: number; active: number };
+    users: { total: number; active: number };
+  }>("/api/admin/metrics");
+  expectStatus("admin can read aggregate platform metrics", platformMetrics, 200);
+  ok(
+    "platform metrics contain only aggregate groups",
+    Object.keys(platformMetrics.data ?? {}).sort().join(",") === "organizations,users",
+  );
+  ok(
+    "platform metrics include global organization and user totals",
+    (platformMetrics.data?.organizations.total ?? 0) >= 2 &&
+      (platformMetrics.data?.users.total ?? 0) >= 1,
+  );
+
+  // Organization-scoped roles are test fixtures, not platform-admin actions.
+  const managerAUser = await registerUser("managerA");
+  await db.user.update({ where: { id: managerAUser.userId }, data: { role: "MANAGER" } });
+  await db.organizationMember.create({
+    data: { userId: managerAUser.userId, organizationId: orgA.data!.id, role: "MANAGER" },
+  });
 
   const managerA = new ApiClient(BASE_URL);
-  await login(managerA, managerAEmail, STAFF_PASSWORD);
+  await login(managerA, managerAUser.email);
+  expectCode(
+    "manager cannot read global platform metrics",
+    await managerA.get("/api/admin/metrics"),
+    403,
+    "FORBIDDEN",
+  );
   expectCode(
     "customer cannot list another organization members",
     await customerA.client.get(`/api/organizations/${orgA.data!.id}/members`),
@@ -290,15 +327,17 @@ async function main() {
   expectStatus("manager creates a branch", branchA, 201);
 
   // Manager B must not touch organization A.
-  const managerBEmail = uniqueEmail("managerB");
-  await adminCtx.client.post(`/api/organizations/${orgB.data!.id}/members`, {
-    name: "Manager B",
-    email: managerBEmail,
-    password: STAFF_PASSWORD,
-    role: "MANAGER",
+  const managerBUser = await registerUser("managerB");
+  await db.user.update({ where: { id: managerBUser.userId }, data: { role: "MANAGER" } });
+  await db.organizationMember.create({
+    data: {
+      userId: managerBUser.userId,
+      organizationId: orgB.data!.id,
+      role: "MANAGER",
+    },
   });
   const managerB = new ApiClient(BASE_URL);
-  await login(managerB, managerBEmail, STAFF_PASSWORD);
+  await login(managerB, managerBUser.email);
   expectCode(
     "manager B cannot create a branch in organization A",
     await managerB.post(`/api/organizations/${orgA.data!.id}/branches`, { name: "Intruso" }),
@@ -340,6 +379,55 @@ async function main() {
     { name: `Atendimento ${Date.now()}`, status: "OPEN" },
   );
   expectStatus("manager creates an OPEN queue", queueA, 201);
+
+  expectCode(
+    "admin cannot list organization branches",
+    await adminCtx.client.get(`/api/organizations/${orgA.data!.id}/branches`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot list organization members",
+    await adminCtx.client.get(`/api/organizations/${orgA.data!.id}/members`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot read organization billing history",
+    await adminCtx.client.get(`/api/organizations/${orgA.data!.id}/transactions`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot list queues at a branch",
+    await adminCtx.client.get(`/api/branches/${branchA.data!.id}/queues`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot read internal queue state",
+    await adminCtx.client.get(`/api/queues/${queueA.data!.id}/state`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot read staff queue details",
+    await adminCtx.client.get(`/api/queues/${queueA.data!.id}/staff`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot subscribe to organization queue events",
+    await adminCtx.client.get(`/api/queues/${queueA.data!.id}/stream`),
+    403,
+    "FORBIDDEN",
+  );
+  expectCode(
+    "admin cannot read customer ticket history",
+    await adminCtx.client.get("/api/tickets/me"),
+    403,
+    "FORBIDDEN",
+  );
 
   const publicQueue = await anonymous.get<{ id: string; waitingCount: number; status: string }>(
     `/api/queues/${queueA.data!.id}`,
@@ -389,6 +477,12 @@ async function main() {
   }>("/api/tickets/me");
   eq("client ticket endpoint returns the active ticket", myTickets.data?.active?.ticket.status, "WAITING");
   eq("active position is computed live", myTickets.data?.active?.ticket.position, 1);
+  expectCode(
+    "admin cannot read a customer's ticket record",
+    await adminCtx.client.get(`/api/tickets/${join1.data!.id}`),
+    403,
+    "FORBIDDEN",
+  );
 
   expectCode(
     "customer cannot call next",
@@ -758,6 +852,9 @@ async function main() {
   const reporter = { check: ok, equal: eq, errorCode: expectCode };
   await runBillingSuite({ baseUrl: BASE_URL, reporter });
   await runEmailSuite({ baseUrl: BASE_URL, reporter });
+  await runOrganizationRegistrationSuite({ baseUrl: BASE_URL, reporter });
+  await runAnalyticsSuite({ baseUrl: BASE_URL, reporter });
+  await runPlatformSecuritySuite({ baseUrl: BASE_URL, reporter });
 
   /* Frontend smoke (Phase 8 + i18n default)                             */
   /* ------------------------------------------------------------------ */

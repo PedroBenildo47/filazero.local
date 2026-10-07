@@ -19,6 +19,7 @@ import {
   assertBranchAccess,
   assertManagerOfOrganization,
   assertOrganizationAccess,
+  requirePermission,
   type AuthContext,
 } from "@/server/context";
 import { assertCanCreateQueue } from "@/server/billing/plan-guard";
@@ -162,6 +163,7 @@ export async function listQueuesForBranch(
 }
 
 export async function getQueueForStaff(ctx: AuthContext, queueId: string) {
+  requirePermission(ctx, "ticket:read:organization");
   const scope = await loadQueueScope(queueId);
   assertOrganizationAccess(ctx, scope.organizationId);
   assertBranchAccess(ctx, scope.organizationId, scope.branchId);

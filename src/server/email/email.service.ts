@@ -11,7 +11,9 @@ import { getEnv, isEmailConfigured } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { sendMail } from "./mailer";
 import {
+  paymentMethodLabel,
   renderPasswordResetEmail,
+  renderPaymentReceiptEmail,
   type EmailLang,
 } from "./templates";
 
@@ -45,6 +47,58 @@ export async function sendPasswordResetEmail(
     return true;
   } catch (error) {
     logger.error({ err: error, to: input.to }, "password reset email failed");
+    return false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Payment receipt                                                             */
+/* -------------------------------------------------------------------------- */
+
+export interface PaymentReceiptEmailInput {
+  to: string;
+  organizationName: string;
+  invoiceNumber: string;
+  planName: string;
+  amountCents: number;
+  currency: string;
+  method: string;
+  reference: string;
+  paidAt: Date;
+  periodEnd: Date | null;
+  lang: EmailLang;
+}
+
+function formatDate(date: Date, lang: EmailLang): string {
+  return new Intl.DateTimeFormat(lang === "pt" ? "pt-PT" : "en-GB", {
+    dateStyle: "long",
+    timeZone: "Africa/Luanda",
+  }).format(date);
+}
+
+/** Sends the automatic payment receipt. Returns true when handed to SMTP. */
+export async function sendPaymentReceiptEmail(
+  input: PaymentReceiptEmailInput,
+): Promise<boolean> {
+  if (!isEmailConfigured()) return false;
+
+  const rendered = renderPaymentReceiptEmail({
+    organizationName: input.organizationName,
+    invoiceNumber: input.invoiceNumber,
+    planName: input.planName,
+    amount: `${(input.amountCents / 100).toFixed(2)} ${input.currency}`,
+    method: paymentMethodLabel(input.method, input.lang),
+    reference: input.reference,
+    paidAt: formatDate(input.paidAt, input.lang),
+    periodEnd: input.periodEnd ? formatDate(input.periodEnd, input.lang) : null,
+    lang: input.lang,
+  });
+
+  try {
+    await sendMail({ to: input.to, ...rendered });
+    return true;
+  } catch (error) {
+    logger.error({ err: error, to: input.to }, "payment receipt email failed");
     return false;
   }
 }

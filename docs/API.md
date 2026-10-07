@@ -326,6 +326,22 @@ Ao exceder o plano: `402 PAYMENT_REQUIRED` (subscrição expirada) ou
 | GET | `/api/notifications?page=&pageSize=` | Lista + contagem de não lidas |
 | PATCH | `/api/notifications/{notificationId}` | Marca uma como lida |
 | POST | `/api/notifications/read-all` | Marca todas como lidas |
+| GET | `/api/notifications/preferences` | Preferências de SMS/WhatsApp do próprio utilizador |
+| PATCH | `/api/notifications/preferences` | Atualiza telemóvel e consentimento por canal |
+| GET | `/api/notifications/deliveries?page=&pageSize=` | Histórico de entregas do próprio utilizador |
+
+### Notificações por SMS e WhatsApp (Fase 4 · Bloco 3)
+
+`GET/PATCH /api/notifications/preferences` gere o telemóvel e o consentimento por
+canal. O telefone é normalizado para E.164 (predefinição `+244`); um número
+inválido devolve `422 VALIDATION_ERROR`. Nada é enviado sem consentimento
+explícito do cliente — os canais começam desativados.
+
+`GET /api/notifications/deliveries` devolve apenas as entregas do próprio
+utilizador (isolamento por conta). Cada entrega é registada com canal, estado
+(`PENDING`, `PROCESSING`, `SENT`, `FAILED`, `SKIPPED`), destinatário, provedor e
+`providerMessageId`. Quando o provedor de um canal não está configurado, a
+entrega é marcada como `SKIPPED` em vez de simulada.
 
 ## Utilidade
 

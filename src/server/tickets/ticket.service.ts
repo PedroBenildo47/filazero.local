@@ -32,6 +32,7 @@ import {
 import type { Permission } from "@/server/rbac";
 import { loadQueueScope } from "@/server/queues/queue.service";
 import { publishQueueEvent } from "@/server/realtime/bus";
+import { scheduleNotificationDrain } from "@/server/notifications/notification-dispatch.service";
 import { ACTIVE_TICKET_STATUSES, assertTicketTransition } from "./ticket.state";
 
 export { ACTIVE_TICKET_STATUSES, TERMINAL_TICKET_STATUSES } from "./ticket.state";
@@ -272,6 +273,8 @@ export async function joinQueue(
     ticketStatus: result.ticket.status,
   });
 
+  scheduleNotificationDrain();
+
   return ticketContext(result.ticket);
 }
 
@@ -470,6 +473,8 @@ export async function leaveQueue(
     ticketStatus: result.ticket.status,
   });
 
+  scheduleNotificationDrain();
+
   return ticketContext(result.ticket);
 }
 
@@ -560,6 +565,8 @@ export async function callNext(
     ticketStatus: result.ticket.status,
   });
 
+  scheduleNotificationDrain();
+
   return ticketContext(result.ticket);
 }
 
@@ -615,6 +622,8 @@ export async function startServing(
     ticketStatus: result.ticket.status,
   });
 
+  scheduleNotificationDrain();
+
   return ticketContext(result.ticket);
 }
 
@@ -668,6 +677,8 @@ export async function completeService(
     ticketStatus: result.ticket.status,
   });
 
+  scheduleNotificationDrain();
+
   return ticketContext(result.ticket);
 }
 
@@ -720,6 +731,8 @@ export async function markNoShow(
     ticketNumber: result.ticket.ticketNumber,
     ticketStatus: result.ticket.status,
   });
+
+  scheduleNotificationDrain();
 
   return ticketContext(result.ticket);
 }
@@ -807,6 +820,8 @@ export async function cancelTicket(
     ticketNumber: result.ticket.ticketNumber,
     ticketStatus: result.ticket.status,
   });
+
+  scheduleNotificationDrain();
 
   return ticketContext(result.ticket);
 }

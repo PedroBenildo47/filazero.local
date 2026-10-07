@@ -23,6 +23,7 @@ import { runPlatformSecuritySuite } from "./platform-security.spec";
 import { runPlatformAdminSuite } from "./platform-admin.spec";
 import { runQueueEntrySuite } from "./queue-entry.spec";
 import { runInvoicingAgtSuite } from "./invoicing-agt.spec";
+import { runNotificationChannelsSuite } from "./notifications.spec";
 
 const BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
 const PASSWORD = "Password123!";
@@ -863,6 +864,7 @@ async function main() {
   await runPlatformAdminSuite({ baseUrl: BASE_URL, reporter });
   await runQueueEntrySuite({ baseUrl: BASE_URL, reporter });
   await runInvoicingAgtSuite({ baseUrl: BASE_URL, reporter });
+  await runNotificationChannelsSuite({ baseUrl: BASE_URL, reporter });
 
   /* Frontend smoke (Phase 8 + i18n default)                             */
   /* ------------------------------------------------------------------ */

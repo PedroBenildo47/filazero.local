@@ -16,6 +16,7 @@ import { paginationToSkipTake, type Pagination } from "@/lib/validation";
 import { recordAudit } from "@/server/audit/audit.service";
 import { createNotification } from "@/server/notifications/notification.service";
 import { publishQueueEvent } from "@/server/realtime/bus";
+import { scheduleNotificationDrain } from "@/server/notifications/notification-dispatch.service";
 import {
   assertBranchAccess,
   assertManagerOfOrganization,
@@ -291,6 +292,8 @@ export async function setQueueStatus(
     organizationId: scope.organizationId,
     queueStatus: queue.status,
   });
+
+  scheduleNotificationDrain();
 
   await recordAudit(db, {
     actorUserId: ctx.user.id,

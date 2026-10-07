@@ -116,6 +116,23 @@ const envSchema = z.object({
   SMTP_FROM: z.string().trim().min(3).default("FilaZero <no-reply@filazero.local>"),
   /** Force STARTTLS when the server advertises it (leave false for local sinks). */
   SMTP_REQUIRE_TLS: booleanish.default("false"),
+
+  // --- SMS (generic HTTP gateway) -----------------------------------------
+  /**
+   * Contract: `POST <SMS_API_URL>` with `Authorization: Bearer <SMS_API_TOKEN>`
+   * and JSON `{ to, message, sender }`. Most Angolan/aggregator gateways expose
+   * this shape; unset means SMS is not configured and nothing is sent.
+   */
+  SMS_API_URL: blankToUndefined(z.string().url().optional()),
+  SMS_API_TOKEN: blankToUndefined(z.string().min(8).optional()),
+  SMS_SENDER_ID: z.string().trim().min(1).max(20).default("FilaZero"),
+
+  // --- WhatsApp (Meta Cloud API) ------------------------------------------
+  /** Base URL of the Graph API (overridable so tests can point at a local sink). */
+  WHATSAPP_API_BASE: z.string().url().default("https://graph.facebook.com"),
+  WHATSAPP_API_VERSION: z.string().trim().min(1).max(12).default("v21.0"),
+  WHATSAPP_PHONE_NUMBER_ID: blankToUndefined(z.string().trim().min(1).optional()),
+  WHATSAPP_ACCESS_TOKEN: blankToUndefined(z.string().min(8).optional()),
 });
 
 export type Env = Omit<z.infer<typeof envSchema>, "ALLOWED_ORIGINS"> & {
@@ -159,4 +176,16 @@ export function exposesPasswordResetToken(): boolean {
 /** True when SMTP is configured, i.e. password reset emails can be delivered. */
 export function isEmailConfigured(): boolean {
   return Boolean(getEnv().SMTP_HOST);
+}
+
+/** True when a real SMS gateway is configured. */
+export function isSmsConfigured(): boolean {
+  const env = getEnv();
+  return Boolean(env.SMS_API_URL && env.SMS_API_TOKEN);
+}
+
+/** True when the Meta WhatsApp Cloud API is configured. */
+export function isWhatsAppConfigured(): boolean {
+  const env = getEnv();
+  return Boolean(env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_ACCESS_TOKEN);
 }

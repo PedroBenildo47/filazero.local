@@ -33,6 +33,7 @@ import type { Permission } from "@/server/rbac";
 import { loadQueueScope } from "@/server/queues/queue.service";
 import { publishQueueEvent } from "@/server/realtime/bus";
 import { scheduleNotificationDrain } from "@/server/notifications/notification-dispatch.service";
+import { normalizePhone } from "@/server/notifications/notification-messages";
 import { ACTIVE_TICKET_STATUSES, assertTicketTransition } from "./ticket.state";
 
 export { ACTIVE_TICKET_STATUSES, TERMINAL_TICKET_STATUSES } from "./ticket.state";
@@ -43,6 +44,7 @@ interface LockedQueueRow {
   organization_id: string;
   branch_id: string;
   ticket_sequence: number;
+  kiosk_enabled?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -114,13 +116,15 @@ async function recomputePositions(
   });
 
   for (const ticket of promoted) {
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "POSITION_CHANGED",
-      title: "A sua posição mudou",
-      message: `A sua nova posição na fila é ${ticket.position}.`,
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "POSITION_CHANGED",
+        title: "A sua posição mudou",
+        message: `A sua nova posição na fila é ${ticket.position}.`,
+        ticketId: ticket.id,
+      });
+    }
   }
 }
 
@@ -180,6 +184,102 @@ function ticketContext(ticket: Ticket) {
 /* -------------------------------------------------------------------------- */
 /* Customer operations                                                         */
 /* -------------------------------------------------------------------------- */
+
+export interface GuestTicketInput {
+  name?: string | null;
+  phone?: string | null;
+}
+
+/**
+ * Walk-in ticket taken at a kiosk/totem: no account, optional guest identity.
+ *
+ * Reuses the exact same queue-engine guarantees as `joinQueue` — queue row lock
+ * for `ticket_number`, FIFO position, audit trail — but the ticket has no owner
+ * and only exists while the queue has kiosk mode enabled. Guest tickets are
+ * screen-only (the walk-in is physically present), so no notification is sent.
+ */
+export async function joinQueueAsGuest(queueId: string, input: GuestTicketInput) {
+  const guestPhone = input.phone ? normalizePhone(input.phone) : null;
+  if (input.phone && !guestPhone) throw AppError.validation("Invalid phone number");
+  const guestName = input.name?.trim() ? input.name.trim().slice(0, 120) : null;
+
+  const result = await db.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<LockedQueueRow[]>`
+      SELECT id, status, organization_id, branch_id, ticket_sequence, kiosk_enabled
+      FROM queues
+      WHERE id = ${queueId}::uuid
+      FOR UPDATE
+    `;
+    const queue = rows[0];
+    if (!queue) throw AppError.notFound("Queue not found");
+    if (!queue.kiosk_enabled) {
+      throw AppError.forbidden("Kiosk mode is not enabled for this queue");
+    }
+    if (queue.status !== "OPEN") throw AppError.queueClosed();
+
+    const available = await tx.branch.findFirst({
+      where: {
+        id: queue.branch_id,
+        status: "ACTIVE",
+        organization: { status: "ACTIVE" },
+      },
+      select: { id: true },
+    });
+    if (!available) throw AppError.queueClosed("This queue is not available");
+
+    const ticketNumber = queue.ticket_sequence + 1;
+    await tx.queue.update({
+      where: { id: queueId },
+      data: { ticketSequence: ticketNumber },
+    });
+
+    const waitingCount = await tx.ticket.count({
+      where: { queueId, status: "WAITING" },
+    });
+    const position = waitingCount + 1;
+
+    const created = await tx.ticket.create({
+      data: {
+        queueId,
+        userId: null,
+        guestName,
+        guestPhone,
+        ticketNumber,
+        status: "WAITING",
+        position,
+      },
+    });
+
+    await recordAudit(tx, {
+      actorUserId: null,
+      action: "ticket.join.guest",
+      entityType: "ticket",
+      entityId: created.id,
+      metadata: { queueId, ticketNumber, position, kiosk: true },
+      ipAddress: null,
+      userAgent: null,
+    });
+
+    return { ticket: created, organizationId: queue.organization_id };
+  });
+
+  publishQueueEvent({
+    type: "ticket.joined",
+    queueId,
+    organizationId: result.organizationId,
+    ticketId: result.ticket.id,
+    ticketNumber: result.ticket.ticketNumber,
+    ticketStatus: result.ticket.status,
+  });
+
+  scheduleNotificationDrain();
+
+  return {
+    queueId,
+    ticketNumber: result.ticket.ticketNumber,
+    position: result.ticket.position,
+  };
+}
 
 export async function joinQueue(
   ctx: AuthContext,
@@ -443,13 +543,15 @@ export async function leaveQueue(
     await clearCurrentTicket(tx, ticketId);
     await recomputePositions(tx, ticket.queueId);
 
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "TICKET_CANCELLED",
-      title: "Saiu da fila",
-      message: "O seu ticket foi cancelado.",
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "TICKET_CANCELLED",
+        title: "Saiu da fila",
+        message: "O seu ticket foi cancelado.",
+        ticketId: ticket.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,
@@ -535,13 +637,15 @@ export async function callNext(
     });
     await recomputePositions(tx, queueId);
 
-    await createNotification(tx, {
-      userId: called.userId,
-      type: "CUSTOMER_CALLED",
-      title: "É a sua vez",
-      message: `Dirija-se ao atendimento. Ticket nº ${called.ticketNumber}.`,
-      ticketId: called.id,
-    });
+    if (called.userId) {
+      await createNotification(tx, {
+        userId: called.userId,
+        type: "CUSTOMER_CALLED",
+        title: "É a sua vez",
+        message: `Dirija-se ao atendimento. Ticket nº ${called.ticketNumber}.`,
+        ticketId: called.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,
@@ -593,13 +697,15 @@ export async function startServing(
       data: { currentTicketId: serving.id },
     });
 
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "SERVING_STARTED",
-      title: "Atendimento iniciado",
-      message: `O atendimento do ticket nº ${ticket.ticketNumber} começou.`,
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "SERVING_STARTED",
+        title: "Atendimento iniciado",
+        message: `O atendimento do ticket nº ${ticket.ticketNumber} começou.`,
+        ticketId: ticket.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,
@@ -648,13 +754,15 @@ export async function completeService(
     await clearCurrentTicket(tx, ticketId);
     await recomputePositions(tx, ticket.queueId);
 
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "SERVICE_COMPLETED",
-      title: "Atendimento concluído",
-      message: `O atendimento do ticket nº ${ticket.ticketNumber} foi concluído.`,
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "SERVICE_COMPLETED",
+        title: "Atendimento concluído",
+        message: `O atendimento do ticket nº ${ticket.ticketNumber} foi concluído.`,
+        ticketId: ticket.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,
@@ -703,13 +811,15 @@ export async function markNoShow(
     await clearCurrentTicket(tx, ticketId);
     await recomputePositions(tx, ticket.queueId);
 
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "TICKET_CANCELLED",
-      title: "Ticket marcado como não compareceu",
-      message: `O ticket nº ${ticket.ticketNumber} foi marcado como não compareceu.`,
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "TICKET_CANCELLED",
+        title: "Ticket marcado como não compareceu",
+        message: `O ticket nº ${ticket.ticketNumber} foi marcado como não compareceu.`,
+        ticketId: ticket.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,
@@ -789,15 +899,17 @@ export async function cancelTicket(
     await clearCurrentTicket(tx, ticketId);
     await recomputePositions(tx, ticket.queueId);
 
-    await createNotification(tx, {
-      userId: ticket.userId,
-      type: "TICKET_CANCELLED",
-      title: "Ticket cancelado",
-      message: input.reason
-        ? `O ticket nº ${ticket.ticketNumber} foi cancelado: ${input.reason}`
-        : `O ticket nº ${ticket.ticketNumber} foi cancelado.`,
-      ticketId: ticket.id,
-    });
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "TICKET_CANCELLED",
+        title: "Ticket cancelado",
+        message: input.reason
+          ? `O ticket nº ${ticket.ticketNumber} foi cancelado: ${input.reason}`
+          : `O ticket nº ${ticket.ticketNumber} foi cancelado.`,
+        ticketId: ticket.id,
+      });
+    }
 
     await recordAudit(tx, {
       actorUserId: ctx.user.id,

@@ -109,3 +109,21 @@ não existem credenciais de PSP. O adaptador Stripe está implementado (chamada
 REST real) mas **não foi exercitado**. O provider `invoice` é integralmente
 funcional e testado. Ligar um PSP real é: definir `PAYMENT_PROVIDER=stripe` +
 as duas chaves, e apontar o webhook do PSP para `/api/billing/webhook`.
+
+## 7. Painel financeiro da plataforma (Super Admin)
+
+`GET /api/admin/finance?months=` (ver [API.md](./API.md)) agrega, para o dono da
+plataforma: receita total, **receita por plano**, série mensal (fuso
+`Africa/Luanda`), **MRR** (preços de subscrições `ACTIVE`, normalizados ao mês) e
+a distribuição de subscrições por estado.
+
+- Só transações `SUCCEEDED` contam como receita — o painel lê exatamente o mesmo
+  dado que o webhook assinado produziu; não há forma de o administrador inflar
+  receita.
+- Transações `PENDING` aparecem separadas como "por liquidar".
+- O diretório global (`/api/admin/organizations`) mostra o plano de cada
+  organização, mas **não** permite alterar pagamentos: só atribuir plano
+  (entitlement) e suspender/reativar.
+- A eliminação permanente de uma organização é **bloqueada** quando existe
+  qualquer transação `SUCCEEDED` (`409 CONFLICT`), protegendo o histórico
+  financeiro; nesses casos a ação disponível é suspender.

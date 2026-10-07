@@ -85,6 +85,23 @@ const envSchema = z.object({
   /** Merchant phone / name shown in the Multicaixa Express instructions. */
   MULTICAIXA_MERCHANT_PHONE: blankToUndefined(z.string().max(32).optional()),
   MULTICAIXA_MERCHANT_NAME: blankToUndefined(z.string().max(160).optional()),
+  // --- Invoicing (AGT) ----------------------------------------------------
+  /** Issuer NIF (emitente) printed on every fiscal document. */
+  PLATFORM_TAX_ID: blankToUndefined(z.string().max(20).optional()),
+  /** Legal name of the issuer shown on invoices. */
+  PLATFORM_LEGAL_NAME: z.string().trim().min(1).max(200).default("FilaZero"),
+  PLATFORM_ADDRESS: blankToUndefined(z.string().max(255).optional()),
+  PLATFORM_CITY: blankToUndefined(z.string().max(120).optional()),
+  /** Standard VAT (IVA) rate in basis points; 1400 = 14%. */
+  IVA_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(1400),
+  /**
+   * AGT software-certificate private key (PEM). When set, invoices are signed
+   * with RSA-SHA256 and marked `agtCertified`; otherwise a deterministic
+   * integrity HMAC is used and the document is flagged as not yet certified.
+   */
+  AGT_PRIVATE_KEY: blankToUndefined(z.string().min(1).optional()),
+  AGT_HASH_SECRET: blankToUndefined(z.string().min(16).optional()),
+
   /** Length of the trial granted when an organization is created. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   /** Plan code attached to a new organization's trial. */

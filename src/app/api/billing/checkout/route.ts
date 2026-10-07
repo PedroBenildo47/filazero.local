@@ -18,6 +18,7 @@ export const POST = route(async (request) => {
     auth,
     body.organizationId,
     body.planId,
+    body.method,
     getRequestMeta(request),
   );
   return created(result);

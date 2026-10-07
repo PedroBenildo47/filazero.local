@@ -92,6 +92,23 @@ export function billingIntervalKey(interval: string): MessageKey {
   return `interval.${interval}` as MessageKey;
 }
 
+/**
+ * Portuguese display name for a plan code (the panel shows PT names while the
+ * technical `code` stays visible). Returns null for unknown codes so callers
+ * can fall back to the catalogue name.
+ */
+const PLAN_NAME_KEYS: Record<string, MessageKey> = {
+  trial: "planName.trial",
+  starter: "planName.starter",
+  growth: "planName.growth",
+  enterprise: "planName.enterprise",
+};
+
+export function planNameKey(code: string | null | undefined): MessageKey | null {
+  if (!code) return null;
+  return PLAN_NAME_KEYS[code] ?? null;
+}
+
 /** Formats an amount given in the smallest currency unit. */
 export function formatMoney(amountCents: number, currency: string): string {
   return `${(amountCents / 100).toFixed(2)} ${currency}`;

@@ -246,15 +246,37 @@ após os receber o cliente volta a pedir o estado pelos endpoints autorizados.
 | GET | `/api/organizations/{id}/subscription` | `billing:read` | Subscrição, plano, quotas e utilização |
 | POST | `/api/organizations/{id}/subscription` | `organization:manage` | Atribuir plano (entitlement, **não** é pagamento) |
 | GET | `/api/organizations/{id}/transactions` | `billing:read` | Histórico de pagamentos |
+| GET | `/api/organizations/{id}/invoices` | `billing:read` | Histórico de faturas (pagamentos `SUCCEEDED`) |
+| GET | `/api/organizations/{id}/invoices/{transactionId}` | `billing:read` | Fatura detalhada (para impressão) |
+| POST | `/api/organizations/{id}/transactions/{transactionId}/proof` | `billing:manage` | Envia o comprovativo (multipart `file`) |
+| GET | `/api/organizations/{id}/transactions/{transactionId}/proof` | `billing:read` | Descarrega o comprovativo mais recente |
 | POST | `/api/billing/checkout` | `billing:manage` | Inicia um checkout real (cria transação `PENDING`) |
 | POST | `/api/billing/webhook` | assinatura | Confirmação do provider |
 
 `POST /api/billing/checkout`
 ```json
-{ "organizationId": "…", "planId": "…" }
+{ "organizationId": "…", "planId": "…", "method": "MULTICAIXA_EXPRESS" }
 ```
-Resposta: `{ reference, checkoutUrl, instructions, transaction }`. Um plano grátis
-(0) devolve `400 BAD_REQUEST` — nesses casos atribui-se o plano.
+`method` é `MULTICAIXA_EXPRESS` (por omissão), `BANK_TRANSFER` ou `CARD`.
+Resposta: `{ reference, method, checkoutUrl, instructions, transaction }`. Um
+plano grátis (0) devolve `400 BAD_REQUEST` — nesses casos atribui-se o plano.
+
+| Método | Transporte | Comportamento |
+| --- | --- | --- |
+| `MULTICAIXA_EXPRESS` | `INVOICE` | Referência + instruções passo-a-passo (ou link de gateway se `MULTICAIXA_API_URL` estiver definido) |
+| `BANK_TRANSFER` | `INVOICE` | Referência + dados bancários (`BILLING_BANK_*`) |
+| `CARD` | `STRIPE` | Checkout Session hospedada; sem `STRIPE_SECRET_KEY` devolve `503 SERVICE_UNAVAILABLE` |
+
+**Comprovativo de pagamento.** `POST .../transactions/{id}/proof` aceita
+`multipart/form-data` com o campo `file` (PDF, JPEG, PNG ou WebP, ≤ 5 MB). O tipo
+é detectado pelos bytes (o `Content-Type` declarado não é de confiança). O
+comprovativo move a transação `PENDING → UNDER_REVIEW` e **nunca** a marca como
+paga: só o webhook assinado pode passar a `SUCCEEDED`.
+
+Estados de transação: `PENDING`, `UNDER_REVIEW`, `SUCCEEDED`, `FAILED`,
+`REFUNDED`. Ao passar a `SUCCEEDED`, é atribuído um número de fatura sequencial
+(`FT/{ano}/{sequência}`) e o recibo é enviado automaticamente por email para o
+email da organização (ou para o primeiro gestor).
 
 `POST /api/billing/webhook` — sem autenticação de sessão; o credor é a
 assinatura:

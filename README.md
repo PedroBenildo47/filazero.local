@@ -267,6 +267,16 @@ A posição mostrada ao cliente é **calculada ao vivo** a partir dos tickets
   histórico em `GET /api/notifications/deliveries`.
 - Sem provedor configurado, a entrega fica `SKIPPED` — nunca simulada.
 
+## Modo quiosque / totem (Fase 4 · Bloco 4)
+
+- O cliente **sem conta** retira uma senha num tablet/totem (`/totem/{queueId}`);
+  o ticket é um visitante real na base de dados (`userId` nulo, `guestName`/
+  `guestPhone` opcionais) e entra na mesma fila e no mesmo motor de atendimento.
+- O ecrã de sala (`/ecra/{queueId}`) mostra o número em atendimento e os próximos
+  a aguardar — só números, nunca nomes, pelo que pode ficar num ecrã público.
+- O modo é ligado/desligado por fila (`PATCH /api/queues/{queueId}/kiosk`) e o
+  endpoint público de senhas é limitado a 8 pedidos/minuto por IP.
+
 ## Testes
 
 | Suíte | Âmbito | Verificações |

@@ -310,6 +310,24 @@ nunca anuncie um evento que não foi confirmado na base de dados.
 - Consentimento explícito: `User.smsOptIn`/`User.whatsappOptIn` começam a
   `false` e só o cliente os liga em `/conta`.
 
+## 8.8 Modo quiosque / totem (Fase 4 · Bloco 4)
+
+Um cliente sem conta retira uma senha num tablet. Para isso o ticket passou a
+admitir `userId` nulo, com `guest_name`/`guest_phone` opcionais, e a fila ganhou
+`kiosk_enabled` (por omissão `false`).
+
+- `POST /api/public/queues/{queueId}/tickets` cria o ticket de visitante no mesmo
+  motor do `joinQueue` (lock da fila + `ticket_sequence`), mas sem sessão; é
+  limitado a 8 pedidos/minuto por IP e recusa filas sem quiosque ativo ou
+  fechadas.
+- `GET /api/public/queues/{queueId}/board` devolve o número em atendimento e a
+  lista ordenada de números à espera. Não expõe nomes nem identificadores, pelo
+  que é seguro num ecrã público (`/ecra/{queueId}`).
+- As notificações de eventos continuam a ser criadas só quando existe utilizador
+  (`if (ticket.userId)`), pelo que os visitantes não geram notificações in-app.
+- O totem (`/totem/{queueId}`) lê o painel público para mostrar a posição e
+  reinicia-se após inatividade.
+
 ## 9. Ambientes e deploy
 
 - Configuração exclusivamente por variáveis de ambiente, validadas por zod

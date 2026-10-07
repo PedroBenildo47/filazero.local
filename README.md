@@ -39,8 +39,8 @@ PostgreSQL.
 O sistema está funcional de ponta a ponta: frontend Next.js bilingue (PT/EN)
 consumindo apenas endpoints reais, queue engine com locking transacional,
 notificações reais, tempo real por SSE, rate limiting e CORS, faturamento B2B com
-webhook assinado e email transacional — e uma suíte de **307 verificações**
-automatizadas.
+webhook assinado, email transacional e relatórios/analytics com exportação
+server-side — e uma suíte de **529 verificações** automatizadas.
 
 ## Stack
 
@@ -116,9 +116,9 @@ Nenhum segredo real é escrito no código nem no repositório.
 | `npm run db:migrate:dev` | Cria/aplica migrations em desenvolvimento |
 | `npm run db:migrate:deploy` | Aplica migrations em produção |
 | `npm run db:seed` | Cria o administrador inicial (dados reais) |
-| `npm run test:unit` | Testes unitários da lógica pura (81) |
+| `npm run test:unit` | Testes unitários da lógica pura (112) |
 | `npm run test:integration` | Testes da camada de serviços (67) |
-| `npm run test:api` | Testes HTTP contra um servidor em execução (159) |
+| `npm run test:api` | Testes HTTP contra um servidor em execução (350) |
 | `npm run test:api:with-server` | Build + servidor + suíte HTTP, tudo automático |
 
 ## Estrutura do projeto
@@ -145,7 +145,7 @@ filazero/
 │   │   ├── staff/                 # dashboard do staff
 │   │   ├── gestor/                # dashboard do manager (+ billing)
 │   │   ├── admin/                 # dashboard do administrador
-│   │   └── api/                   # 41 endpoints REST + SSE + webhook
+│   │   └── api/                   # 42 endpoints REST + SSE + webhook
 │   ├── components/                # sessão, idioma, navegação, guardas, SSE
 │   ├── middleware.ts              # CORS hardening
 │   ├── lib/                       # db, env, erros, http, i18n, api-client
@@ -241,14 +241,26 @@ A posição mostrada ao cliente é **calculada ao vivo** a partir dos tickets
 - Sem SMTP configurado o token só é devolvido fora de produção; com SMTP
   configurado nunca é devolvido por HTTP.
 
+## Relatórios e analytics (Fase 4 · Bloco 2)
+
+- `GET /api/organizations/{id}/analytics` devolve agora, além das séries por
+  dia/semana/hora e dos tempos por fila: distribuição por estado, taxas de
+  conclusão/cancelamento/não comparência, médias globais e picos de procura.
+- `GET /api/organizations/{id}/analytics/export?format=csv|pdf` gera o relatório
+  **no servidor** a partir dos mesmos dados — CSV (BOM, CRLF e proteção contra
+  fórmulas de folha de cálculo) e PDF A4 real com `pdf-lib`.
+- O painel do gestor descarrega os ficheiros reais; deixou de haver geração de
+  CSV no browser e impressão para PDF.
+- Mesmo escopo de filial e isolamento por inquilino do endpoint JSON.
+
 ## Testes
 
 | Suíte | Âmbito | Verificações |
 | --- | --- | --- |
-| `npm run test:unit` | RBAC, validação, erros, máquina de estados, membros, rate limit, i18n, assinatura de webhook, regras de billing, templates de email | 81 |
+| `npm run test:unit` | RBAC, validação, erros, máquina de estados, membros, rate limit, i18n, assinatura de webhook, regras de billing, templates de email, formatação de exportação | 112 |
 | `npm run test:integration` | Camada de serviços contra PostgreSQL (Fases 3–6) | 67 |
-| `npm run test:api` | HTTP real: auth, RBAC, queue engine, concorrência, SSE, CORS, cabeçalhos, rate limiting, billing + quotas, email por SMTP | 159 |
-| **Total** | | **307** |
+| `npm run test:api` | HTTP real: auth, RBAC, queue engine, concorrência, SSE, CORS, cabeçalhos, rate limiting, billing + quotas, email por SMTP, exportação de analytics | 350 |
+| **Total** | | **529** |
 
 Ver [docs/VALIDATION.md](./docs/VALIDATION.md) para a evidência completa.
 

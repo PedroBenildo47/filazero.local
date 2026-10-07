@@ -32,6 +32,7 @@ interface Organization {
   category: string | null;
   city: string | null;
   description: string | null;
+  taxId: string | null;
   status: string;
 }
 interface Branch {
@@ -148,7 +149,12 @@ function ManagerDashboard() {
     null,
   );
 
-  const [orgForm, setOrgForm] = useState({ name: "", category: "", city: "" });
+  const [orgForm, setOrgForm] = useState({
+    name: "",
+    category: "",
+    city: "",
+    taxId: "",
+  });
   const [branchForm, setBranchForm] = useState({ name: "", address: "", city: "" });
   const [queueForm, setQueueForm] = useState({ name: "", description: "" });
   const [memberForm, setMemberForm] = useState({
@@ -297,6 +303,7 @@ function ManagerDashboard() {
         name: organization.name,
         category: organization.category ?? "",
         city: organization.city ?? "",
+        taxId: organization.taxId ?? "",
       });
     }
     void loadOrganization(organizationId);
@@ -424,6 +431,16 @@ function ManagerDashboard() {
                   onChange={(event) => setOrgForm({ ...orgForm, city: event.target.value })}
                 />
               </label>
+              <label className="field">
+                <span>{t("manager.taxId")}</span>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  placeholder={t("manager.taxIdHint")}
+                  value={orgForm.taxId}
+                  onChange={(event) => setOrgForm({ ...orgForm, taxId: event.target.value })}
+                />
+              </label>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -437,6 +454,7 @@ function ManagerDashboard() {
                           name: orgForm.name,
                           category: orgForm.category,
                           city: orgForm.city,
+                          taxId: orgForm.taxId,
                         },
                       }),
                     t("manager.saved"),
@@ -700,7 +718,15 @@ function ManagerDashboard() {
                                 onClick={() => void printInvoice(invoice.id)}
                               >
                                 {t("billing.viewInvoice")}
-                              </button>
+                              </button>{" "}
+                              <a
+                                className="btn btn-ghost btn-sm"
+                                href={`/api/organizations/${organizationId}/invoices/${invoice.id}/pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {t("billing.downloadPdf")}
+                              </a>
                             </td>
                           </tr>
                         ))}

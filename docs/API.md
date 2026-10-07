@@ -167,7 +167,7 @@ gestores de outras organizações recebem `403 FORBIDDEN`.
 
 | Método | Rota | Permissão |
 | --- | --- | --- |
-| GET | `/api/queues/{queueId}` | público (estado e nº de pessoas) |
+| GET | `/api/queues/{ref}` | público (estado e nº de pessoas) |
 | PATCH | `/api/queues/{queueId}` | `queue:manage` |
 | PATCH | `/api/queues/{queueId}/status` | `queue:manage` |
 | GET | `/api/queues/{queueId}/staff` | membro com acesso à filial |
@@ -176,6 +176,26 @@ gestores de outras organizações recebem `403 FORBIDDEN`.
 
 `status`: `OPEN` · `PAUSED` · `CLOSED`. Ao passar de `OPEN` para outro estado,
 todos os clientes em espera recebem notificação real.
+
+### Código público e entrada do cliente (Fase 2)
+
+Cada fila tem um **código público** curto, único e legível (`publicCode`, ex.
+`7F3A9C2B`), independente do UUID. O `GET /api/queues/{ref}` aceita **UUID ou
+código público** (insensível a maiúsculas), pelo que o mesmo endpoint serve o QR
+Code, o link direto e a entrada manual.
+
+O cliente entra na fila por duas vias:
+
+1. **QR Code / link / código** — o QR gerado no painel do gestor codifica
+   `/fila/{publicCode}`. A página `/pesquisar` lê o QR pela câmara
+   (`BarcodeDetector`, com degradação graciosa) ou aceita o código/link colado.
+2. **Pesquisa manual** — a lista pública (`/api/public/organizations`) permite
+escolher a empresa e a fila.
+
+Uma fila recém-criada fica imediatamente visível no diretório público e
+resolúvel por código; suspender a organização (`SUSPENDED`) remove o acesso
+público no mesmo instante, e reativar restaura-o. Uma fila `CLOSED` continua a
+resolver pelo QR (a página abre), mas não aceita novas senhas.
 
 ## Tickets / queue engine (Fase 6)
 

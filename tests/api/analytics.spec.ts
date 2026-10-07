@@ -169,6 +169,88 @@ export async function runAnalyticsSuite(options: {
       403,
       "FORBIDDEN",
     );
+
+    // ---- Server-side export (Fase 4 · Bloco 2) ----------------------------
+    async function download(path: string, cookie: string | null) {
+      const response = await fetch(new URL(path, baseUrl), {
+        headers: cookie ? { cookie } : {},
+      });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return {
+        status: response.status,
+        headers: response.headers,
+        bytes,
+        text: bytes.toString("utf8"),
+      };
+    }
+
+    const exportBase = `/api/organizations/${organizationAId}/analytics/export`;
+    const exportQuery = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timezone=Africa%2FLuanda`;
+
+    const csv = await download(
+      `${exportBase}${exportQuery}&format=csv`,
+      managerA.client.cookieHeader(),
+    );
+    reporter.equal("analytics export: CSV is generated on the server", csv.status, 200);
+    reporter.equal(
+      "analytics export: CSV content type",
+      csv.headers.get("content-type") ?? "",
+      "text/csv; charset=utf-8",
+    );
+    reporter.equal(
+      "analytics export: CSV is sent as an attachment",
+      (csv.headers.get("content-disposition") ?? "").startsWith("attachment;"),
+      true,
+    );
+    reporter.equal(
+      "analytics export: CSV carries a UTF-8 BOM",
+      csv.text.charCodeAt(0),
+      0xfeff,
+    );
+    reporter.check(
+      "analytics export: CSV holds the branch-scoped issued total",
+      csv.text.includes('"Senhas emitidas","2"'),
+    );
+    reporter.check(
+      "analytics export: CSV never leaks another branch",
+      !csv.text.includes("Analytics Queue B"),
+    );
+
+    const pdf = await download(
+      `${exportBase}${exportQuery}&format=pdf`,
+      managerA.client.cookieHeader(),
+    );
+    reporter.equal("analytics export: PDF is generated on the server", pdf.status, 200);
+    reporter.equal(
+      "analytics export: PDF content type",
+      pdf.headers.get("content-type") ?? "",
+      "application/pdf",
+    );
+    reporter.equal(
+      "analytics export: PDF has the %PDF signature",
+      pdf.bytes.subarray(0, 4).toString("latin1"),
+      "%PDF",
+    );
+    reporter.check("analytics export: PDF is a real document", pdf.bytes.length > 1_000);
+
+    reporter.errorCode(
+      "analytics export: an unknown format is rejected",
+      await managerA.client.get(`${exportBase}${exportQuery}&format=xml`),
+      422,
+      "VALIDATION_ERROR",
+    );
+    reporter.errorCode(
+      "analytics export: a manager from another organization is denied",
+      await managerB.client.get(`${exportBase}${exportQuery}&format=csv`),
+      403,
+      "FORBIDDEN",
+    );
+    reporter.errorCode(
+      "analytics export: an administrator is denied",
+      await admin.client.get(`${exportBase}${exportQuery}&format=csv`),
+      403,
+      "FORBIDDEN",
+    );
   } finally {
     if (organizationIds.length > 0) {
       await db.organization.deleteMany({ where: { id: { in: organizationIds } } });

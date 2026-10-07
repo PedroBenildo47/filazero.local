@@ -1534,18 +1534,172 @@ select.input {
 .footer {
   border-top: 1px solid var(--border);
   margin-top: 3rem;
-  padding: 1.5rem 1.25rem;
-  color: var(--fg-subtle);
-  font-size: 0.82rem;
+  padding: 2rem 1.25rem 1rem;
+  color: var(--fg-muted);
+  font-size: 0.86rem;
 }
 
 .footer-inner {
   max-width: 1080px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) repeat(2, minmax(170px, 1fr));
+  gap: 2rem;
+  padding-bottom: 1.5rem;
+}
+
+.footer-brand {
+  max-width: 300px;
+}
+
+.footer-name {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  color: var(--fg);
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.footer-brand p {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.footer-heading {
+  margin-bottom: 0.65rem;
+  color: var(--fg);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.footer-links {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer-link {
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.footer-link:hover {
+  color: var(--primary);
+}
+
+.footer-contact-email {
+  display: block;
+  color: var(--fg-subtle);
+  font-size: 0.78rem;
+}
+
+.footer-bottom {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  color: var(--fg-subtle);
+  font-size: 0.76rem;
+}
+
+/* --------------------------------------------------------- information pages */
+.information-page {
+  max-width: 920px;
+}
+
+.information-header {
+  max-width: 760px;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.information-header .eyebrow {
+  margin-bottom: 0.3rem;
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.information-header h1 {
+  margin-top: 0.35rem;
+}
+
+.information-body {
+  max-width: 760px;
+}
+
+.information-section {
+  padding: 1.15rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.information-section h2,
+.information-contact h2,
+.information-index-section h2 {
+  margin-bottom: 0.6rem;
+}
+
+.information-section p {
+  max-width: 72ch;
+  margin: 0.55rem 0;
+  color: var(--fg-muted);
+}
+
+.information-section ul {
+  padding-left: 1.25rem;
+  color: var(--fg-muted);
+}
+
+.information-section li + li {
+  margin-top: 0.35rem;
+}
+
+.information-contact {
+  padding: 1.2rem 0;
+}
+
+.information-email {
+  display: inline-block;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.information-actions {
+  display: flex;
   flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.4rem;
+}
+
+.information-index-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.information-index-section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.information-link-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.information-link-list a {
+  font-weight: 550;
 }
 
 /* -------------------------------------------------------------- animations */
@@ -1640,6 +1794,20 @@ select.input {
     padding: 1.25rem 1rem 3.5rem;
   }
 
+  .footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem 1rem;
+  }
+
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
+
+  .information-index-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.3rem;
+  }
+
   .form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1662,5 +1830,15 @@ select.input {
 
   .ticket-number {
     font-size: 2.1rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .footer-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .footer-brand {
+    grid-column: auto;
   }
 }

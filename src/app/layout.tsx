@@ -5,6 +5,7 @@ import { LanguageProvider } from "@/components/LanguageProvider";
 import { SessionProvider } from "@/components/SessionProvider";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/ThemeProvider";
 import { Nav } from "@/components/Nav";
+import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "FilaZero — filas sem confusão",
@@ -38,12 +39,7 @@ export default function RootLayout({
             <SessionProvider>
               <Nav />
               {children}
-              <footer className="footer">
-                <div className="footer-inner">
-                  <span>FilaZero</span>
-                  <span>PostgreSQL · Next.js · SSE</span>
-                </div>
-              </footer>
+              <Footer />
             </SessionProvider>
           </LanguageProvider>
         </ThemeProvider>

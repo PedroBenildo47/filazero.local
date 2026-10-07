@@ -112,36 +112,43 @@ async function drawTable(
   rows: Array<Array<string | number>>,
   aligns: Array<"left" | "right">,
 ): Promise<void> {
+  const headerSize = 8;
+  const headerLines = headers.map((header, index) =>
+    wrapHeader(doc.fonts.bold, header, headerSize, (widths[index] ?? 0) - 6),
+  );
+  const headerLinesMax = Math.max(1, ...headerLines.map((lines) => lines.length));
+  const headerHeight = headerLinesMax * 10 + 6;
+
   const drawHeader = () => {
+    const top = doc.y;
     doc.page.drawRectangle({
       x: MARGIN,
-      y: doc.y - 5,
+      y: top - headerHeight,
       width: CONTENT_WIDTH,
-      height: 18,
+      height: headerHeight,
       color: SOFT,
     });
     let x = MARGIN + 4;
     headers.forEach((header, index) => {
       const width = widths[index] ?? 0;
       const align = aligns[index] ?? "left";
-      if (align === "right") {
-        const textWidth = doc.fonts.bold.widthOfTextAtSize(header, 9);
-        doc.page.drawText(header, {
-          x: x + width - textWidth,
-          y: doc.y,
-          size: 9,
+      const lines = headerLines[index] ?? [header];
+      lines.forEach((line, lineIndex) => {
+        const textWidth = doc.fonts.bold.widthOfTextAtSize(line, headerSize);
+        doc.page.drawText(line, {
+          x: align === "right" ? x + width - textWidth : x,
+          y: top - 10 - lineIndex * 10,
+          size: headerSize,
           font: doc.fonts.bold,
           color: INK,
         });
-      } else {
-        doc.page.drawText(header, { x, y: doc.y, size: 9, font: doc.fonts.bold, color: INK });
-      }
+      });
       x += width;
     });
-    doc.y -= 20;
+    doc.y = top - headerHeight - 4;
   };
 
-  await ensureSpace(doc, 40);
+  await ensureSpace(doc, headerHeight + 20);
   drawHeader();
 
   for (const cells of rows) {
@@ -181,6 +188,24 @@ function clip(font: PDFFont, text: string, size: number, maxWidth: number): stri
     result = result.slice(0, -1);
   }
   return `${result}…`;
+}
+
+/** Splits a table header across up to two lines so narrow columns stay readable. */
+function wrapHeader(font: PDFFont, text: string, size: number, maxWidth: number): string[] {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return [text];
+  const lines: string[] = [];
+  let current = "";
+  for (const word of text.split(" ")) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (!current || font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 2).map((line) => clip(font, line, size, maxWidth));
 }
 
 function drawKpi(
@@ -363,7 +388,7 @@ export async function renderAnalyticsPdf(
       labels.averageWaitSeconds,
       labels.averageServiceSeconds,
     ],
-    [CONTENT_WIDTH - 300, 130, 60, 55, 55],
+    [CONTENT_WIDTH - 360, 130, 80, 75, 75],
     report.queuePerformance.map((entry) => [
       entry.branchName,
       entry.queueName,

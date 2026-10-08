@@ -5,6 +5,7 @@ import { uuidSchema } from "@/lib/validation";
 export const paymentMethodSchema = z.enum([
   "MULTICAIXA_EXPRESS",
   "BANK_TRANSFER",
+  "QR_CODE",
   "CARD",
 ]);
 

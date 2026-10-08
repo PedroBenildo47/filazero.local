@@ -14,7 +14,9 @@ export interface PublicBoard {
     id: string;
     name: string;
     status: string;
+    organizationId: string;
     organizationName: string;
+    organizationLogoUrl: string | null;
     branchName: string;
   };
   currentTicketNumber: number | null;
@@ -33,7 +35,10 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
       status: true,
       kioskEnabled: true,
       branch: {
-        select: { name: true, organization: { select: { name: true } } },
+        select: {
+          name: true,
+          organization: { select: { id: true, name: true, logoUrl: true } },
+        },
       },
       currentTicket: { select: { ticketNumber: true } },
     },
@@ -55,7 +60,9 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
       id: queue.id,
       name: queue.name,
       status: queue.status,
+      organizationId: queue.branch.organization.id,
       organizationName: queue.branch.organization.name,
+      organizationLogoUrl: queue.branch.organization.logoUrl,
       branchName: queue.branch.name,
     },
     currentTicketNumber: queue.currentTicket?.ticketNumber ?? null,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { Alert, Badge, EmptyState, Spinner } from "@/components/ui";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 import { queueStatusKey, statusTone } from "@/lib/ui";
 
 interface Queue {
@@ -27,6 +28,7 @@ interface Organization {
   address: string | null;
   city: string | null;
   country: string | null;
+  logoUrl: string | null;
   branches: Branch[];
 }
 
@@ -83,12 +85,21 @@ export function OrganizationView({ organizationId }: { organizationId: string })
           ← {t("nav.search")}
         </Link>
       </p>
-      <h1>{organization.name}</h1>
-      <p className="muted">
-        {[organization.category, organization.city, organization.country]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
+      <div className="queue-header">
+        <OrganizationLogo
+          logoUrl={organization.logoUrl}
+          name={organization.name}
+          size={72}
+        />
+        <div>
+          <h1 className="queue-header-title">{organization.name}</h1>
+          <p className="muted">
+            {[organization.category, organization.city, organization.country]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+      </div>
       {organization.description && <p>{organization.description}</p>}
       {organization.address && (
         <p className="muted">

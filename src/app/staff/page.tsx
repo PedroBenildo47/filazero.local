@@ -15,12 +15,14 @@ import {
   Spinner,
   StatCard,
 } from "@/components/ui";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 import { queueStatusKey, statusTone, ticketStatusKey } from "@/lib/ui";
 
 interface Organization {
   id: string;
   name: string;
   city: string | null;
+  logoUrl: string | null;
 }
 interface Branch {
   id: string;
@@ -46,7 +48,7 @@ interface TicketRow {
 interface QueueState {
   queue: { id: string; name: string; status: string; description: string | null };
   branch: { id: string; name: string; city: string | null };
-  organization: { id: string; name: string };
+  organization: { id: string; name: string; logoUrl: string | null };
   current: TicketRow | null;
   waiting: TicketRow[];
   recent: TicketRow[];
@@ -244,11 +246,18 @@ function StaffDashboard() {
       ) : state ? (
         <>
           <div className="row spread">
-            <div>
-              <h2>{state.queue.name}</h2>
-              <span className="muted">
-                {state.organization.name} · {state.branch.name}
-              </span>
+            <div className="queue-header">
+              <OrganizationLogo
+                logoUrl={state.organization.logoUrl}
+                name={state.organization.name}
+                size={48}
+              />
+              <div>
+                <h2 className="queue-header-title">{state.queue.name}</h2>
+                <span className="muted">
+                  {state.organization.name} · {state.branch.name}
+                </span>
+              </div>
             </div>
             <div className="row">
               <Badge tone={statusTone(state.queue.status)}>

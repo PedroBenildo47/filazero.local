@@ -11,13 +11,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 
 interface Board {
   queue: {
     id: string;
     name: string;
     status: string;
+    organizationId: string;
     organizationName: string;
+    organizationLogoUrl: string | null;
     branchName: string;
   };
   currentTicketNumber: number | null;
@@ -107,6 +110,12 @@ export default function TotemPage() {
         color: "#f8fafc",
       }}
     >
+      <OrganizationLogo
+        logoUrl={board?.queue.organizationLogoUrl}
+        name={board?.queue.organizationName ?? "FilaZero"}
+        size={96}
+        variant="dark"
+      />
       <p style={{ margin: 0, opacity: 0.7, letterSpacing: "0.08em", textTransform: "uppercase" }}>
         {board?.queue.organizationName ?? "FilaZero"} · {board?.queue.branchName ?? ""}
       </p>

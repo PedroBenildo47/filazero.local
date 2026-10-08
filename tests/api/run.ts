@@ -25,6 +25,7 @@ import { runQueueEntrySuite } from "./queue-entry.spec";
 import { runInvoicingAgtSuite } from "./invoicing-agt.spec";
 import { runNotificationChannelsSuite } from "./notifications.spec";
 import { runKioskSuite } from "./kiosk.spec";
+import { runFullFlowSuite } from "./full-flow.spec";
 
 const BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
 const PASSWORD = "Password123!";
@@ -867,6 +868,7 @@ async function main() {
   await runInvoicingAgtSuite({ baseUrl: BASE_URL, reporter });
   await runNotificationChannelsSuite({ baseUrl: BASE_URL, reporter });
   await runKioskSuite({ baseUrl: BASE_URL, reporter });
+  await runFullFlowSuite({ baseUrl: BASE_URL, reporter });
 
   /* Frontend smoke (Phase 8 + i18n default)                             */
   /* ------------------------------------------------------------------ */

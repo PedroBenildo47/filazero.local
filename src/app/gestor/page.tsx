@@ -15,7 +15,6 @@ import {
   StatCard,
 } from "@/components/ui";
 import {
-  billingIntervalKey,
   formatMoney,
   memberStatusKey,
   paymentMethodKey,
@@ -113,15 +112,7 @@ interface Invoice {
   periodStart: string | null;
   periodEnd: string | null;
 }
-interface CheckoutResult {
-  reference: string;
-  method: string;
-  checkoutUrl: string | null;
-  instructions: string | null;
-}
 
-const PAYMENT_METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "CARD"] as const;
-type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 function ManagerDashboard() {
   const { t, tError } = useI18n();
@@ -139,11 +130,8 @@ function ManagerDashboard() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const [billing, setBilling] = useState<BillingOverview | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
-  const [method, setMethod] = useState<PaymentMethod>("MULTICAIXA_EXPRESS");
   const [proofBusyId, setProofBusyId] = useState<string | null>(null);
   const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
     null,
@@ -188,12 +176,11 @@ function ManagerDashboard() {
     async (id: string) => {
       if (!id) return;
       try {
-        const [branchList, memberList, billingData, planList, transactionList, invoiceList] =
+        const [branchList, memberList, billingData, transactionList, invoiceList] =
           await Promise.all([
             api<{ items: Branch[] }>(`/api/organizations/${id}/branches?pageSize=50`),
             api<{ items: Member[] }>(`/api/organizations/${id}/members?pageSize=50`),
             api<BillingOverview>(`/api/organizations/${id}/subscription`),
-            api<{ items: Plan[] }>("/api/plans"),
             api<{ items: Transaction[] }>(
               `/api/organizations/${id}/transactions?pageSize=20`,
             ),
@@ -202,7 +189,6 @@ function ManagerDashboard() {
         setBranches(branchList.items);
         setMembers(memberList.items);
         setBilling(billingData);
-        setPlans(planList.items);
         setTransactions(transactionList.items);
         setInvoices(invoiceList.items);
         setBranchId((current) =>
@@ -216,25 +202,6 @@ function ManagerDashboard() {
     },
     [tError],
   );
-
-  async function pay(planId: string) {
-    setBusy(true);
-    setError(null);
-    setCheckout(null);
-    try {
-      const result = await api<CheckoutResult>("/api/billing/checkout", {
-        method: "POST",
-        json: { organizationId, planId, method },
-      });
-      setCheckout(result);
-      if (result.checkoutUrl) window.open(result.checkoutUrl, "_blank", "noopener");
-      await loadOrganization(organizationId);
-    } catch (caught) {
-      setError(tError(caught));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function submitProof(transactionId: string, file: File) {
     setProofBusyId(transactionId);
@@ -525,92 +492,12 @@ function ManagerDashboard() {
                   />
                 </div>
 
-                <h3>{t("billing.choosePlan")}</h3>
-                <div className="field">
-                  <span>{t("billing.chooseMethod")}</span>
-                  <div className="row method-picker">
-                    {PAYMENT_METHODS.map((option) => (
-                      <label
-                        key={option}
-                        className={`method-option${method === option ? " is-selected" : ""}`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment-method"
-                          value={option}
-                          checked={method === option}
-                          onChange={() => setMethod(option)}
-                        />
-                        <span>{t(paymentMethodKey(option))}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>{t("billing.plan")}</th>
-                      <th>{t("billing.amount")}</th>
-                      <th>{t("billing.usage")}</th>
-                      <th>{t("common.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plans.map((plan) => (
-                      <tr
-                        key={plan.id}
-                        className={
-                          plan.id === billing.subscription?.planId ? "is-selected" : ""
-                        }
-                      >
-                        <td>
-                          <strong>{plan.name}</strong>
-                          <div className="muted">{plan.description}</div>
-                        </td>
-                        <td>
-                          {plan.priceCents === 0
-                            ? t("billing.free")
-                            : `${formatMoney(plan.priceCents, plan.currency)} / ${t(
-                                billingIntervalKey(plan.interval),
-                              )}`}
-                        </td>
-                        <td className="muted">
-                          {plan.maxBranches} {t("billing.branches")} ·{" "}
-                          {plan.maxQueuesPerBranch} {t("billing.queues")} ·{" "}
-                          {plan.maxStaff} {t("billing.staff")}
-                        </td>
-                        <td>
-                          {plan.priceCents > 0 && (
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              disabled={busy}
-                              onClick={() => void pay(plan.id)}
-                            >
-                              {t("billing.checkout")}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {checkout && (
-                  <Alert kind="info">
-                    <div>
-                      <strong>{t("billing.reference")}:</strong> {checkout.reference}
-                    </div>
-                    {checkout.instructions && (
-                      <pre className="instructions">{checkout.instructions}</pre>
-                    )}
-                    {checkout.checkoutUrl && (
-                      <a href={checkout.checkoutUrl} target="_blank" rel="noreferrer">
-                        {t("billing.payNow")}
-                      </a>
-                    )}
-                  </Alert>
-                )}
+      <div className="row billing-plans-cta">
+        <p className="muted">{t("billing.choosePlanHint")}</p>
+        <Link href="/#planos" className="btn btn-primary">
+          {t("billing.viewPlans")}
+        </Link>
+      </div>
 
                 <h3>{t("billing.history")}</h3>
                 {transactions.length === 0 ? (

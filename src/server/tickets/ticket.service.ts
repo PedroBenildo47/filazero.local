@@ -968,7 +968,7 @@ export async function getQueueState(
       where: { id: queueId },
       include: {
         branch: { select: { id: true, name: true, city: true } },
-        organization: { select: { id: true, name: true } },
+        organization: { select: { id: true, name: true, logoUrl: true } },
       },
     }),
     db.ticket.findMany({

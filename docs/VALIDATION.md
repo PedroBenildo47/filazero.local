@@ -169,6 +169,38 @@ Validado neste ambiente (que **não tem Docker**):
 
 As imagens **não foram construídas** aqui — ver [DEPLOY.md](./DEPLOY.md).
 
+## Fase 4 — logótipo nos ecrãs públicos e fluxo ponta a ponta
+
+O logótipo oficial da organização é agora devolvido pelas APIs públicas e
+renderizado (com fallback para a inicial) em:
+
+- `/fila/[code]` — ecrã de entrada do cliente;
+- `/ecra/[queueId]` — painel de chamada da sala de espera;
+- `/totem/[queueId]` — quiosque público;
+- `/staff` — painel operacional de chamada;
+- `/estabelecimento/[id]` e `/pesquisar` — diretório público.
+
+Campos adicionados (aditivos, sem quebra de contrato):
+`organizationLogoUrl` no board público; `organization.logoUrl` no detalhe da fila
+e no estado de staff; `logoUrl` no diretório e no detalhe público de organização.
+
+### Fluxo ponta a ponta (suite `tests/api/full-flow.spec.ts`)
+
+Um único encadeamento contínuo contra o servidor real e PostgreSQL:
+
+| Passo | Verificação |
+| --- | --- |
+| Landing | `GET /` responde 200 e renderiza a página PT |
+| Registo | auto-registo multipart com **logótipo + NIF**; gestor criado; cookie de sessão |
+| Planos | catálogo público contém o plano pago |
+| Checkout | Multicaixa Express, transferência e **QR_CODE** (payload EMVCo com CRC válido) |
+| Webhook | assinado → `SUCCEEDED`, subscrição `ACTIVE`, número de fatura `FR…` |
+| Backoffice | atualizar NIF, substituir/remover logótipo, endpoint público e board com logótipo |
+
+O script `scripts/run-api-tests.sh` define `BILLING_BANK_IBAN`/`BILLING_BANK_GUI`
+para que o caminho QR seja realmente exercitado; sem IBAN o checkout QR devolve
+503 e a suite verifica exatamente isso.
+
 ## Limitações conhecidas (honestas)
 
 - **Pagamentos com cartão:** o adaptador Stripe faz a chamada REST real mas

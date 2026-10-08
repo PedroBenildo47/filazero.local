@@ -46,6 +46,7 @@ export async function listPublicOrganizations(query: PublicDirectoryQuery) {
         address: true,
         city: true,
         country: true,
+        logoUrl: true,
         branches: {
           where: { status: "ACTIVE" },
           orderBy: { name: "asc" },
@@ -87,6 +88,7 @@ export async function getPublicOrganization(organizationId: string) {
       country: true,
       phone: true,
       email: true,
+      logoUrl: true,
       branches: {
         where: { status: "ACTIVE" },
         orderBy: { name: "asc" },

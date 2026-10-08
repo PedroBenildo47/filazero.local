@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { QrScanner, supportsQrScanning } from "@/components/QrScanner";
 import { Alert, Badge, Card, EmptyState, Spinner } from "@/components/ui";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 import { queueStatusKey, statusTone } from "@/lib/ui";
 
 interface PublicQueue {
@@ -27,6 +28,7 @@ interface PublicOrganization {
   category: string | null;
   address: string | null;
   city: string | null;
+  logoUrl: string | null;
   branches: PublicBranch[];
 }
 interface DirectoryResponse {
@@ -213,7 +215,14 @@ export default function SearchPage() {
               {data.items.map((organization) => (
                 <article key={organization.id} className="card card-hover animate-in">
                   <header className="card-head">
-                    <h2 className="card-title">{organization.name}</h2>
+                    <div className="row" style={{ alignItems: "center", gap: "0.75rem" }}>
+                      <OrganizationLogo
+                        logoUrl={organization.logoUrl}
+                        name={organization.name}
+                        size={44}
+                      />
+                      <h2 className="card-title">{organization.name}</h2>
+                    </div>
                     <Link
                       href={`/estabelecimento/${organization.id}`}
                       className="btn btn-ghost"

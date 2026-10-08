@@ -334,7 +334,7 @@ export async function getPublicQueue(queueIdOrCode: string) {
       description: true,
       status: true,
       branch: { select: { id: true, name: true, city: true, address: true } },
-      organization: { select: { id: true, name: true, category: true } },
+      organization: { select: { id: true, name: true, category: true, logoUrl: true } },
     },
   });
 

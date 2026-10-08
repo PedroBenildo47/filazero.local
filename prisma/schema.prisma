@@ -186,6 +186,11 @@ model Organization {
   email       String?            @db.VarChar(255)
   /// NIF (Angolan tax identification number), required on every fiscal document.
   taxId       String?            @map("tax_id") @db.VarChar(20)
+  /// Public URL of the organization's logo. Points either at an external
+  /// image or at the platform's own `/api/public/organizations/:id/logo`
+  /// endpoint when the logo was uploaded to us.
+  logoUrl     String?            @map("logo_url") @db.VarChar(500)
+  logoUpdatedAt DateTime?        @map("logo_updated_at") @db.Timestamptz(6)
   status      OrganizationStatus @default(ACTIVE)
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -197,6 +202,7 @@ model Organization {
   transactions  Transaction[]
   documents     OrganizationDocument[]
   invoiceSeries InvoiceSeries[]
+  logo          OrganizationLogo?
 
   @@index([status])
   @@index([city])
@@ -222,6 +228,24 @@ model OrganizationDocument {
   @@unique([organizationId, type])
   @@index([organizationId, createdAt])
   @@map("organization_documents")
+}
+
+/// Binary payload of an organization's uploaded logo (1:1 with Organization).
+///
+/// It lives in its own table so the frequently-read `organizations` row never
+/// carries the bytes: list queries stay small and the payload is only loaded
+/// when the logo endpoint explicitly asks for it.
+model OrganizationLogo {
+  organizationId String   @id @map("organization_id") @db.Uuid
+  mimeType       String   @map("mime_type") @db.VarChar(100)
+  sizeBytes      Int      @map("size_bytes")
+  sha256         String   @db.Char(64)
+  content        Bytes    @db.ByteA
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_logos")
 }
 
 model Branch {

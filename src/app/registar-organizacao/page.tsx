@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { isValidCompanyNif } from "@/lib/nif";
 import { useI18n } from "@/components/LanguageProvider";
 import { useSession } from "@/components/SessionProvider";
 import { Alert } from "@/components/ui";
@@ -18,6 +19,9 @@ const FINANCIAL_DOCUMENTS: DocumentType[] = ["BANKING_LICENSE", "REGULATOR_AUTHO
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const FILE_ACCEPT = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const LOGO_ACCEPT = "image/png,image/jpeg";
+const ACCEPTED_LOGO_TYPES = ["image/png", "image/jpeg"];
 
 const DOCUMENT_LABEL_KEYS = {
   COMPANY_REGISTRATION: "organizationRegister.documentCompany",
@@ -60,8 +64,11 @@ export default function OrganizationRegistrationPage() {
     country: "Angola",
     organizationPhone: "",
     organizationEmail: "",
+    taxId: "",
+    logoUrl: "",
   });
   const [files, setFiles] = useState<Partial<Record<DocumentType, File>>>({});
+  const [logo, setLogo] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [planCode, setPlanCode] = useState<string | null>(null);
@@ -77,6 +84,7 @@ export default function OrganizationRegistrationPage() {
   const requiredDocuments = financialSector
     ? [...STANDARD_DOCUMENTS, ...FINANCIAL_DOCUMENTS]
     : STANDARD_DOCUMENTS;
+  const taxIdInvalid = form.taxId.trim().length > 0 && !isValidCompanyNif(form.taxId);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -111,9 +119,31 @@ export default function OrganizationRegistrationPage() {
     setFiles((previous) => ({ ...previous, [type]: file }));
   }
 
+  function selectLogo(file?: File) {
+    setError(null);
+    if (!file) {
+      setLogo(null);
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setError(t("organizationRegister.logoTooLarge", { size: formatFileSize(MAX_LOGO_BYTES) }));
+      return;
+    }
+    if (file.type && !ACCEPTED_LOGO_TYPES.includes(file.type)) {
+      setError(t("organizationRegister.logoTypeError"));
+      return;
+    }
+    setLogo(file);
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    if (!isValidCompanyNif(form.taxId)) {
+      setError(t("organizationRegister.taxIdInvalid"));
+      return;
+    }
 
     const missingDocument = requiredDocuments.find((type) => !files[type]);
     if (missingDocument) {
@@ -124,7 +154,12 @@ export default function OrganizationRegistrationPage() {
     setBusy(true);
     try {
       const body = new FormData();
-      for (const [key, value] of Object.entries(form)) body.set(key, value);
+      for (const [key, value] of Object.entries(form)) {
+        // A chosen file takes precedence over the external URL field.
+        if (key === "logoUrl" && logo) continue;
+        body.set(key, value);
+      }
+      if (logo) body.append("logo", logo);
       for (const type of requiredDocuments) body.append(`document.${type}`, files[type]!);
 
       await api("/api/public/organizations/register", { method: "POST", formData: body });
@@ -164,6 +199,24 @@ export default function OrganizationRegistrationPage() {
               <input className="input" required minLength={2} maxLength={200} value={form.organizationName} onChange={(event) => update("organizationName", event.target.value)} />
             </label>
             <label className="field">
+              <span>{t("organizationRegister.taxId")} <strong aria-hidden="true">*</strong></span>
+              <input
+                className="input"
+                required
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={20}
+                placeholder={t("organizationRegister.taxIdPlaceholder")}
+                value={form.taxId}
+                onChange={(event) => update("taxId", event.target.value)}
+              />
+              <small className={taxIdInvalid ? "muted field-error" : "muted"}>
+                {taxIdInvalid
+                  ? t("organizationRegister.taxIdInvalid")
+                  : t("organizationRegister.taxIdHint")}
+              </small>
+            </label>
+            <label className="field">
               <span>{t("organizationRegister.category")}</span>
               <select className="input" required value={form.category} onChange={(event) => selectCategory(event.target.value)}>
                 <option value="">{t("organizationRegister.chooseCategory")}</option>
@@ -198,6 +251,33 @@ export default function OrganizationRegistrationPage() {
             <label className="field form-field-wide">
               <span>{t("organizationRegister.description")}</span>
               <textarea className="input textarea" maxLength={2000} rows={3} value={form.description} onChange={(event) => update("description", event.target.value)} />
+            </label>
+            <label className="field upload-field">
+              <span>{t("organizationRegister.logo")}</span>
+              <input
+                className="input file-input"
+                type="file"
+                accept={LOGO_ACCEPT}
+                onChange={(event) => selectLogo(event.currentTarget.files?.[0])}
+              />
+              <small className="muted">
+                {logo
+                  ? `${logo.name} · ${formatFileSize(logo.size)}`
+                  : t("organizationRegister.logoHint", { size: formatFileSize(MAX_LOGO_BYTES) })}
+              </small>
+            </label>
+            <label className="field">
+              <span>{t("organizationRegister.logoUrl")}</span>
+              <input
+                className="input"
+                type="url"
+                maxLength={500}
+                placeholder="https://…"
+                disabled={Boolean(logo)}
+                value={form.logoUrl}
+                onChange={(event) => update("logoUrl", event.target.value)}
+              />
+              <small className="muted">{t("organizationRegister.logoUrlHint")}</small>
             </label>
           </div>
         </section>

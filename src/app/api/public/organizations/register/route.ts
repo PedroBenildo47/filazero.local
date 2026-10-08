@@ -11,6 +11,7 @@ import {
 import {
   selfRegisterOrganization,
   type RegistrationDocumentUpload,
+  type RegistrationLogoUpload,
 } from "@/server/organizations/self-registration.service";
 import { selfRegistrationSchema } from "@/server/organizations/self-registration.schemas";
 
@@ -66,8 +67,24 @@ export const POST = route(async (request) => {
   const formData = await readMultipartBody(request);
   const fields: Record<string, string | undefined> = {};
   const uploads: RegistrationDocumentUpload[] = [];
+  let logo: RegistrationLogoUpload | undefined;
 
   for (const [key, value] of formData.entries()) {
+    if (key === "logo") {
+      if (!(value instanceof File)) {
+        throw AppError.validation("The organization logo must be a file");
+      }
+      if (logo) {
+        throw AppError.validation("Only one organization logo may be uploaded");
+      }
+      logo = {
+        fileName: value.name,
+        mimeType: value.type,
+        bytes: Buffer.from(await value.arrayBuffer()),
+      };
+      continue;
+    }
+
     if (key.startsWith("document.")) {
       const type = key.slice("document.".length);
       if (!isRegistrationDocumentType(type) || !(value instanceof File)) {
@@ -92,7 +109,7 @@ export const POST = route(async (request) => {
   }
 
   const input = selfRegistrationSchema.parse(fields);
-  const result = await selfRegisterOrganization(input, uploads, getRequestMeta(request));
+  const result = await selfRegisterOrganization(input, uploads, logo, getRequestMeta(request));
   await setSessionCookie(result.token, result.expiresAt);
 
   return created({
@@ -100,5 +117,6 @@ export const POST = route(async (request) => {
     organization: publicOrganization(result.organization),
     activated: true,
     documentTypes: result.documentTypes,
+    logo: result.logo,
   });
 });

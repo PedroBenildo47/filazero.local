@@ -117,9 +117,9 @@ Nenhum segredo real é escrito no código nem no repositório.
 | `npm run db:migrate:dev` | Cria/aplica migrations em desenvolvimento |
 | `npm run db:migrate:deploy` | Aplica migrations em produção |
 | `npm run db:seed` | Cria o administrador inicial (dados reais) |
-| `npm run test:unit` | Testes unitários da lógica pura (122) |
+| `npm run test:unit` | Testes unitários da lógica pura (128) |
 | `npm run test:integration` | Testes da camada de serviços (67) |
-| `npm run test:api` | Testes HTTP contra um servidor em execução (374) |
+| `npm run test:api` | Testes HTTP contra um servidor em execução (394) |
 | `npm run test:api:with-server` | Build + servidor + suíte HTTP, tudo automático |
 
 ## Estrutura do projeto
@@ -281,9 +281,9 @@ A posição mostrada ao cliente é **calculada ao vivo** a partir dos tickets
 
 | Suíte | Âmbito | Verificações |
 | --- | --- | --- |
-| `npm run test:unit` | RBAC, validação, erros, máquina de estados, membros, rate limit, i18n, assinatura de webhook, regras de billing, templates de email, formatação de exportação, regras de notificação | 122 |
+| `npm run test:unit` | RBAC, validação, erros, máquina de estados, membros, rate limit, i18n, assinatura de webhook, regras de billing, templates de email, formatação de exportação, regras de notificação, regras de NIF angolano | 128 |
 | `npm run test:integration` | Camada de serviços contra PostgreSQL (Fases 3–6) | 67 |
-| `npm run test:api` | HTTP real: auth, RBAC, queue engine, concorrência, SSE, CORS, cabeçalhos, rate limiting, billing + quotas, email por SMTP, exportação de analytics, entrega SMS/WhatsApp | 374 |
+| `npm run test:api` | HTTP real: auth, RBAC, queue engine, concorrência, SSE, CORS, cabeçalhos, rate limiting, billing + quotas, email por SMTP, exportação de analytics, entrega SMS/WhatsApp, registo com NIF e logótipo | 394 |
 | **Total** | | **563** |
 
 Ver [docs/VALIDATION.md](./docs/VALIDATION.md) para a evidência completa.

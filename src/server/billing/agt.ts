@@ -32,19 +32,19 @@ export const INVOICE_DOCUMENT_LABELS: Record<
 /* -------------------------------------------------------------------------- */
 
 /**
- * Angolan NIF: 9 digits (individuals) or 10 digits (legal persons). Spaces and
- * dots are tolerated on input and stripped before validation.
+ * Angolan NIF rules now live in the shared, client-safe `@/lib/nif` module so the
+ * API schema and the registration form validate with the exact same code. They
+ * are re-exported here to keep the invoicing surface unchanged for callers.
  */
-export function normalizeNif(value: string | null | undefined): string | null {
-  if (value === null || value === undefined) return null;
-  const cleaned = value.replace(/[\s.\-/]/g, "").toUpperCase();
-  return cleaned.length === 0 ? null : cleaned;
-}
-
-export function isValidNif(value: string | null | undefined): boolean {
-  const nif = normalizeNif(value);
-  return nif !== null && /^\d{9,10}$/.test(nif);
-}
+export {
+  ANGOLAN_PROVINCE_CODES,
+  isValidCompanyNif,
+  isValidNif,
+  nifKind,
+  nifKindLabel,
+  normalizeNif,
+  type NifKind,
+} from "@/lib/nif";
 
 /* -------------------------------------------------------------------------- */
 /* VAT                                                                         */

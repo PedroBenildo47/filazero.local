@@ -75,24 +75,30 @@ inclui `resetToken` (não há provedor de email configurado — ver
 | GET | `/api/admin/metrics` | `platform:admin` (apenas agregados globais) |
 | GET | `/api/public/organizations?q=&city=&page=` | público |
 | GET | `/api/public/organizations/{id}` | público |
+| GET | `/api/public/organizations/{id}/logo` | público |
 | POST | `/api/public/organizations/register` | público, limitado por IP |
 
 `POST /api/public/organizations/register` aceita `multipart/form-data`. Envie os
 campos de texto `ownerName`, `ownerEmail`, `ownerPhone`, `password`,
 `organizationName`, `category`, `description`, `address`, `city`, `country`,
-`organizationPhone` e `organizationEmail`. Campos opcionais vazios podem ser
-omitidos. Anexe os documentos usando os campos `document.<TIPO>`:
+`organizationPhone`, `organizationEmail` e `taxId`. O `taxId` é o NIF da empresa
+e é **obrigatório**: 10 dígitos começados por `5` (pessoa coletiva), validado em
+`@/lib/nif`. Opcionalmente envie `logoUrl` (ligação HTTPS) ou um ficheiro no
+campo `logo` (PNG ou JPEG, máx. 2 MiB); o ficheiro tem precedência sobre o URL.
+Campos opcionais vazios podem ser omitidos. Anexe os documentos usando os campos
+`document.<TIPO>`:
 
 | Setor | Tipos obrigatórios |
 | --- | --- |
 | Padrão | `COMPANY_REGISTRATION`, `TAX_REGISTRATION` |
 | Categoria contendo “Banco” ou “Instituição Financeira” | Os dois anteriores, `BANKING_LICENSE` e `REGULATOR_AUTHORIZATION` |
 
-Cada documento tem limite de 8 MiB; o corpo multipart total tem limite de 34
-MiB. São aceites PDF, JPEG e PNG, conferindo a assinatura do ficheiro além do
-MIME declarado. Os bytes são armazenados na tabela privada
-`organization_documents`; esta API não disponibiliza leitura pública dos
-ficheiros. O limite é de 5 pedidos por IP/hora.
+Cada documento tem limite de 8 MiB e o logótipo 2 MiB; o corpo multipart total
+tem limite de 36 MiB. São aceites PDF, JPEG e PNG, conferindo a assinatura do
+ficheiro além do MIME declarado. Os bytes dos documentos ficam na tabela privada
+`organization_documents`; os do logótipo em `organization_logos` e são servidos
+publicamente por `GET /api/public/organizations/{id}/logo`. O limite é de 5
+pedidos por IP/hora.
 
 Quando os campos e os documentos obrigatórios passam essas validações, a
 transação cria a conta de gestor, a organização `ACTIVE`, a associação, os
@@ -292,9 +298,11 @@ após os receber o cliente volta a pedir o estado pelos endpoints autorizados.
 { "organizationId": "…", "planId": "…", "method": "MULTICAIXA_EXPRESS", "taxId": "5417000000" }
 ```
 `method` é `MULTICAIXA_EXPRESS` (por omissão), `BANK_TRANSFER` ou `CARD`.
-`taxId` (opcional) é o NIF a imprimir na fatura; aceita 9 ou 10 dígitos e é
-normalizado (espaços, pontos e hífenes são removidos). Sem `taxId`, usa-se o NIF
-da organização.
+`taxId` (opcional) é o NIF a imprimir na fatura. Aceita o NIF angolano completo:
+empresa (10 dígitos começados por `5`), pessoa singular (9 dígitos) ou o BI de 14
+caracteres (9 dígitos + sigla de província + 3 dígitos). É normalizado (espaços,
+pontos, hífenes e barras são removidos). Sem `taxId`, usa-se o NIF da
+organização.
 Resposta: `{ reference, method, checkoutUrl, instructions, transaction }`. Um
 plano grátis (0) devolve `400 BAD_REQUEST` — nesses casos atribui-se o plano.
 

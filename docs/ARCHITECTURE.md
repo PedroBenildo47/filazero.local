@@ -328,6 +328,38 @@ admitir `userId` nulo, com `guest_name`/`guest_phone` opcionais, e a fila ganhou
 - O totem (`/totem/{queueId}`) lê o painel público para mostrar a posição e
   reinicia-se após inatividade.
 
+## 8.9 Landing pública, planos e checkout (Fase 1)
+
+A página inicial passou a ser uma landing de marketing servida em `/`, com
+cabeçalho próprio (`MarketingHeader`); o `Nav` de aplicação esconde-se em `/`.
+Os planos são lidos do catálogo real (`GET /api/plans`) — sem dados simulados —
+e o catálogo alinha-se ao mockup (Free, Essencial 100.000 Kz, Profissional
+200.000 Kz, Enterprise 250.000 Kz), mantendo os *codes* técnicos
+(`trial`/`starter`/`growth`/`enterprise`) estáveis.
+
+O fluxo de subscrição: clicar num plano na landing →
+`/registar-organizacao?plan=<code>` → após o registo segue para
+`/checkout?plan=<code>`, que confirma o plano e inicia um pagamento real
+(`POST /api/billing/checkout`). O painel `/gestor` mantém apenas o resumo
+read-only da subscrição, com ligação para a vitrine pública (`/#planos`).
+
+## 8.10 Logótipo da organização e NIF angolano (Fase 2)
+
+O modelo `Organization` ganhou `logo_url`/`logo_updated_at`; os bytes do
+logótipo vivem em `organization_logos` (1:1, fora da linha da organização) para
+que as listagens nunca carreguem o payload. No registo pode enviar-se um
+ficheiro `logo` (PNG/JPEG, máx. 2 MiB) ou um `logoUrl` HTTPS; o ficheiro tem
+precedência. O logótipo é servido publicamente por
+`GET /api/public/organizations/{id}/logo` (sem autenticação, para o ecrã, o
+totem e a página da organização) e é reutilizado na Fase 4.
+
+A validação do NIF angolano passou a ser partilhada em `@/lib/nif` (cliente e
+servidor): pessoa coletiva = 10 dígitos começados por `5`; pessoa singular = 9
+dígitos; BI = 14 caracteres (9 dígitos + sigla de província + 3 dígitos). O
+`taxId` da organização exige o formato de pessoa coletiva e é **obrigatório** no
+auto-registo. Angola não expõe um dígito de controlo universal, pelo que a
+validação é estrutural (a mesma que os validadores de referência da AGT).
+
 ## 9. Ambientes e deploy
 
 - Configuração exclusivamente por variáveis de ambiente, validadas por zod
@@ -359,11 +391,13 @@ Empacotamento: `Dockerfile` multi-stage (`deps` → `builder` → `migrator` →
 | 12 Dashboards | ✅ (cliente, staff, gestor, admin) |
 | + Painel Super Admin | ✅ financeiro, organizações, moderação e auditoria global |
 | 13 Segurança | ✅ rate limiting (PostgreSQL), CORS por middleware, cabeçalhos |
-| 14 Testes | ✅ 81 unit + 67 integração + 159 HTTP |
+| 14 Testes | ✅ 128 unit + 394 HTTP |
 | 15 Deploy | ✅ Dockerfile multi-stage, compose, `.dockerignore`, DEPLOY.md |
 | + i18n PT/EN | ✅ seletor persistido, dicionários tipados |
 | + Billing B2B | ✅ planos, subscrições, checkout, webhook assinado, quotas |
 | + Email SMTP | ✅ templates PT/EN, entrega real |
+| + Landing + checkout (Fase 1) | ✅ landing, planos do catálogo real, `/checkout` público |
+| + Logótipo + NIF angolano (Fase 2) | ✅ `organization_logos`, validação de NIF em `@/lib/nif` |
 
 ## 10. Definição de "pronto"
 

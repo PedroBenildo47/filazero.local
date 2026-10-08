@@ -11,7 +11,9 @@ import { hashPassword } from "@/server/auth/password";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
 import {
   detectedDocumentMimeType,
+  detectedLogoMimeType,
   isRegistrationDocumentType,
+  MAX_LOGO_BYTES,
   MAX_REGISTRATION_DOCUMENT_BYTES,
   MAX_REGISTRATION_UPLOAD_BYTES,
   requiredRegistrationDocuments,
@@ -26,12 +28,19 @@ export interface RegistrationDocumentUpload {
   bytes: Buffer;
 }
 
+export interface RegistrationLogoUpload {
+  fileName: string;
+  mimeType: string;
+  bytes: Buffer;
+}
+
 export interface SelfRegistrationResult {
   user: User;
   organization: Organization;
   token: string;
   expiresAt: Date;
   documentTypes: RegistrationDocumentType[];
+  logo: { url: string | null; uploaded: boolean };
 }
 
 function safeFileName(fileName: string): string {
@@ -95,12 +104,32 @@ function validateUploads(
   });
 }
 
+/** Validates and prepares an uploaded logo (PNG/JPEG, ≤ 2 MiB). */
+function validateLogo(logo: RegistrationLogoUpload | undefined) {
+  if (!logo) return null;
+  if (logo.bytes.byteLength === 0 || logo.bytes.byteLength > MAX_LOGO_BYTES) {
+    throw AppError.validation("The organization logo must be smaller than 2 MiB");
+  }
+  const mimeType = detectedLogoMimeType(logo.bytes);
+  if (!mimeType || (logo.mimeType && logo.mimeType !== mimeType)) {
+    throw AppError.validation("The organization logo must be a valid PNG or JPEG image");
+  }
+  return {
+    mimeType,
+    sizeBytes: logo.bytes.byteLength,
+    sha256: createHash("sha256").update(logo.bytes).digest("hex"),
+    content: logo.bytes,
+  };
+}
+
 export async function selfRegisterOrganization(
   input: SelfRegistrationInput,
   uploads: RegistrationDocumentUpload[],
+  logo: RegistrationLogoUpload | undefined,
   meta: RequestMeta,
 ): Promise<SelfRegistrationResult> {
   const preparedDocuments = validateUploads(input.category, uploads);
+  const preparedLogo = validateLogo(logo);
   const passwordHash = await hashPassword(input.password);
   const env = getEnv();
   const trialPlan = await getPlanByCode(env.TRIAL_PLAN_CODE);
@@ -121,7 +150,7 @@ export async function selfRegisterOrganization(
           },
         });
 
-        const organization = await tx.organization.create({
+        let organization = await tx.organization.create({
           data: {
             name: input.organizationName,
             category: input.category,
@@ -131,9 +160,31 @@ export async function selfRegisterOrganization(
             country: input.country ?? null,
             phone: input.organizationPhone ?? null,
             email: input.organizationEmail ?? null,
+            taxId: input.taxId,
+            logoUrl: preparedLogo ? null : input.logoUrl ?? null,
+            logoUpdatedAt: preparedLogo || input.logoUrl ? new Date() : null,
             status: "ACTIVE",
           },
         });
+
+        if (preparedLogo) {
+          await tx.organizationLogo.create({
+            data: {
+              organizationId: organization.id,
+              mimeType: preparedLogo.mimeType,
+              sizeBytes: preparedLogo.sizeBytes,
+              sha256: preparedLogo.sha256,
+              content: Uint8Array.from(preparedLogo.content),
+            },
+          });
+          organization = await tx.organization.update({
+            where: { id: organization.id },
+            data: {
+              logoUrl: `/api/public/organizations/${organization.id}/logo`,
+              logoUpdatedAt: new Date(),
+            },
+          });
+        }
 
         await tx.organizationMember.create({
           data: {
@@ -206,6 +257,7 @@ export async function selfRegisterOrganization(
       token,
       expiresAt,
       documentTypes: preparedDocuments.map((document) => document.type),
+      logo: { url: result.organization.logoUrl, uploaded: preparedLogo !== null },
     };
   } catch (error) {
     if (isUniqueConstraintError(error, "email")) {

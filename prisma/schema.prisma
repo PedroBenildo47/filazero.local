@@ -488,6 +488,10 @@ enum TransactionStatus {
 enum PaymentMethod {
   MULTICAIXA_EXPRESS
   BANK_TRANSFER
+  /// Bank QR: an EMVCo Merchant-Presented payload (Tag 63 CRC-16/CCITT-FALSE)
+  /// the payer scans in the banking app to pre-fill a transfer. Settles through
+  /// the same quotable reference as the other reference-based methods.
+  QR_CODE
   CARD
 }
 

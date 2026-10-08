@@ -138,17 +138,17 @@ export interface PlanDefinition {
 
 /** Prices are in the smallest currency unit (cêntimos for AOA). */
 export const PLAN_CATALOG: readonly PlanDefinition[] = [
-  { code: "trial", name: "Trial", description: "Periodo de avaliacao, sem custo.",
+  { code: "trial", name: "Free", description: "Para começar sem custos. Uma filial e uma fila.",
     priceCents: 0, currency: "AOA", interval: "MONTHLY",
-    maxBranches: 3, maxQueuesPerBranch: 15, maxStaff: 10 },
-  { code: "starter", name: "Starter", description: "Uma clinica ou loja com poucas filas.",
-    priceCents: 2_500_000, currency: "AOA", interval: "MONTHLY",
+    maxBranches: 1, maxQueuesPerBranch: 5, maxStaff: 5 },
+  { code: "starter", name: "Essencial", description: "Para clínicas e lojas com poucas filas.",
+    priceCents: 10_000_000, currency: "AOA", interval: "MONTHLY",
     maxBranches: 3, maxQueuesPerBranch: 20, maxStaff: 15 },
-  { code: "growth", name: "Growth", description: "Varias filiais e equipas maiores.",
-    priceCents: 7_500_000, currency: "AOA", interval: "MONTHLY",
-    maxBranches: 10, maxQueuesPerBranch: 40, maxStaff: 60 },
-  { code: "enterprise", name: "Enterprise", description: "Rede multi-filial com necessidades proprias.",
+  { code: "growth", name: "Profissional", description: "Várias filiais e equipas maiores.",
     priceCents: 20_000_000, currency: "AOA", interval: "MONTHLY",
+    maxBranches: 10, maxQueuesPerBranch: 40, maxStaff: 60 },
+  { code: "enterprise", name: "Enterprise", description: "Rede multi-filial com necessidades próprias.",
+    priceCents: 25_000_000, currency: "AOA", interval: "MONTHLY",
     maxBranches: 100, maxQueuesPerBranch: 200, maxStaff: 1_000 },
 ];
 

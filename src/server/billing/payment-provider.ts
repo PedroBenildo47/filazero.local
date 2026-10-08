@@ -24,6 +24,7 @@ import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
 import { createMulticaixaRequest } from "./multicaixa";
 import { providerForMethod } from "./payment-methods";
+import { buildAngolaBankQr, isValidAngolaIban, normalizeIban } from "./qr-payment";
 
 export interface CheckoutSession {
   provider: PaymentProviderName;
@@ -31,6 +32,8 @@ export interface CheckoutSession {
   checkoutUrl: string | null;
   /** Human instructions (bank transfer details); null for hosted checkout. */
   instructions: string | null;
+  /** EMVCo bank QR payload the payer scans; only for QR_CODE. */
+  qrPayload: string | null;
 }
 
 /** Unique, quotable reference printed on the invoice. */
@@ -56,6 +59,25 @@ function bankInstructions(reference: string, plan: Plan): string | null {
 
 function formatAmount(priceCents: number, currency: string): string {
   return `${(priceCents / 100).toFixed(2)} ${currency}`;
+}
+
+function qrInstructions(reference: string, plan: Plan): string {
+  const env = getEnv();
+  const lines: string[] = [
+    "Pagamento por QR Code bancário (EMVCo)",
+    `Referência: ${reference}`,
+    `Valor: ${formatAmount(plan.priceCents, plan.currency)}`,
+  ];
+  if (env.BILLING_BANK_NAME) lines.push(`Banco: ${env.BILLING_BANK_NAME}`);
+  if (env.BILLING_BANK_IBAN) lines.push(`IBAN: ${normalizeIban(env.BILLING_BANK_IBAN)}`);
+  lines.push(
+    "",
+    "1. Abra a aplicação do seu banco (Multicaixa Express ou home-banking).",
+    "2. Escolha “Pagar por QR Code” e digitalize o código apresentado.",
+    "3. Confirme os dados e autorize o pagamento.",
+    "A subscrição é ativada automaticamente quando o pagamento for confirmado.",
+  );
+  return lines.join("\n");
 }
 
 function buildCheckoutUrl(reference: string, plan: Plan): string | null {
@@ -114,6 +136,7 @@ async function createStripeCheckout(
     providerReference: session.id ?? null,
     checkoutUrl: session.url ?? null,
     instructions: null,
+    qrPayload: null,
   };
 }
 
@@ -141,6 +164,32 @@ export async function createCheckoutSession(
       providerReference: result.providerReference,
       checkoutUrl: result.checkoutUrl,
       instructions: result.instructions,
+      qrPayload: null,
+    };
+  }
+
+  if (method === "QR_CODE") {
+    const iban = env.BILLING_BANK_IBAN;
+    if (!iban || !isValidAngolaIban(iban)) {
+      throw AppError.serviceUnavailable(
+        "QR_CODE requires a valid Angolan BILLING_BANK_IBAN.",
+        { provider: "qr" },
+      );
+    }
+    const qrPayload = buildAngolaBankQr({
+      iban,
+      merchantName: env.BILLING_BANK_NAME ?? env.PLATFORM_LEGAL_NAME,
+      merchantCity: env.PLATFORM_CITY ?? null,
+      amountCents: transaction.amountCents,
+      reference: transaction.reference,
+      acquirerGui: env.BILLING_BANK_GUI ?? null,
+    });
+    return {
+      provider: providerForMethod(method),
+      providerReference: transaction.reference,
+      checkoutUrl: null,
+      instructions: qrInstructions(transaction.reference, plan),
+      qrPayload,
     };
   }
 
@@ -150,6 +199,7 @@ export async function createCheckoutSession(
     providerReference: transaction.reference,
     checkoutUrl: buildCheckoutUrl(transaction.reference, plan),
     instructions: bankInstructions(transaction.reference, plan),
+    qrPayload: null,
   };
 }
 

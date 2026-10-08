@@ -32,6 +32,7 @@ interface Organization {
   city: string | null;
   description: string | null;
   taxId: string | null;
+  logoUrl: string | null;
   status: string;
 }
 interface Branch {
@@ -136,6 +137,8 @@ function ManagerDashboard() {
   const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
     null,
   );
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoVersion, setLogoVersion] = useState(0);
 
   const [orgForm, setOrgForm] = useState({
     name: "",
@@ -225,6 +228,52 @@ function ManagerDashboard() {
       setError(caught instanceof Error ? caught.message : t("errors.NETWORK"));
     } finally {
       setProofBusyId(null);
+    }
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const result = await api<{ logoUrl: string }>(
+        `/api/organizations/${organizationId}/logo`,
+        { method: "POST", formData },
+      );
+      setOrganizations((current) =>
+        current.map((org) =>
+          org.id === organizationId ? { ...org, logoUrl: result.logoUrl } : org,
+        ),
+      );
+      setLogoVersion(Date.now());
+      setNotice(t("manager.logoUpdated"));
+    } catch (caught) {
+      setError(tError(caught));
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (!window.confirm(t("manager.confirmRemove"))) return;
+    setLogoBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/api/organizations/${organizationId}/logo`, { method: "DELETE" });
+      setOrganizations((current) =>
+        current.map((org) =>
+          org.id === organizationId ? { ...org, logoUrl: null } : org,
+        ),
+      );
+      setLogoVersion(Date.now());
+      setNotice(t("manager.logoRemoved"));
+    } catch (caught) {
+      setError(tError(caught));
+    } finally {
+      setLogoBusy(false);
     }
   }
 
@@ -431,6 +480,50 @@ function ManagerDashboard() {
                 {t("manager.saveOrganization")}
               </button>
             </div>
+          </Card>
+
+          <Card title={t("manager.logo")}>
+            <div className="row" style={{ gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+              {(() => {
+                const logoUrl = organizations.find((org) => org.id === organizationId)?.logoUrl;
+                if (!logoUrl) return <p className="muted">{t("manager.logoNone")}</p>;
+                return (
+                  <figure className="logo-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`${logoUrl}${logoUrl.includes("?") ? "&" : "?"}v=${logoVersion}`}
+                      alt={t("manager.logoCurrent")}
+                      width={96}
+                      height={96}
+                    />
+                    <figcaption className="muted">{t("manager.logoCurrent")}</figcaption>
+                  </figure>
+                );
+              })()}
+              <label className="btn btn-primary">
+                {logoBusy ? t("common.loading") : t("manager.logoUpload")}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  hidden
+                  disabled={logoBusy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadLogo(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={logoBusy}
+                onClick={() => void removeLogo()}
+              >
+                {t("manager.logoRemove")}
+              </button>
+            </div>
+            <p className="muted">{t("manager.logoHint")}</p>
           </Card>
 
           <Card title={t("billing.title")}>

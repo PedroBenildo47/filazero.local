@@ -140,6 +140,7 @@ marca a transação como paga.
 | --- | --- | --- |
 | `MULTICAIXA_EXPRESS` | `INVOICE` | Referência + instruções passo-a-passo. Com `MULTICAIXA_API_URL`/`MULTICAIXA_API_KEY` é feito um pedido real ao gateway (EMIS/agregador) e devolvido o link de pagamento |
 | `BANK_TRANSFER` | `INVOICE` | Referência + dados bancários (`BILLING_BANK_*`) para transferência |
+| `QR_CODE` | `INVOICE` | **QR bancário EMVCo** (Merchant-Presented Mode) com o IBAN, o valor e a referência; o pagador digitaliza na app do banco. Exige `BILLING_BANK_IBAN` válido (IBAN AO, mod-97), senão devolve **503** |
 | `CARD` | `STRIPE` | Checkout Session hospedada (Visa/Mastercard). Sem `STRIPE_SECRET_KEY` devolve **503** em vez de fingir uma página |
 
 O `provider` guarda o **transporte** (`INVOICE`/`STRIPE`) e o `method` o método
@@ -169,18 +170,53 @@ para a equipa financeira. Só o webhook assinado pode passar a `SUCCEEDED`
   `GET .../invoices/{transactionId}` devolve a fatura detalhada e
   `GET .../invoices/{transactionId}/pdf` devolve a fatura fiscal em PDF.
 
-### 8.4 Migração e testes
+### 8.4 QR bancário angolano (EMVCo)
+
+`src/server/billing/qr-payment.ts` é um módulo **puro** (sem I/O) que constrói o
+payload EMVCo Merchant-Presented Mode:
+
+- container **TLV** (`Tag-Length-Value`), com comprimentos em **bytes UTF-8**;
+- Tag 53 = `973` (AOA), Tag 58 = `AO`, Tag 59 nome, Tag 60 cidade;
+- Tag 26 (template doméstico) = `00` GUI do adquirente / `01` IBAN / `02`
+  referência; Tag 62 com a referência;
+- Tag 63 = **CRC-16/CCITT-FALSE** (polinómio `0x1021`, valor inicial `0xFFFF`),
+  calculado sobre todo o payload incluindo `6304`.
+
+O IBAN é validado com os dígitos de controlo **mod-97** (ISO 13616). O QR é
+renderizado no checkout com `qrcode.react` a partir do payload devolvido por
+`POST /api/billing/checkout` (`qrPayload`). O `qrPayload` fica também no
+`metadata` da transação.
+
+**Limitação honesta:** o mapeamento exato dos sub-tags do template doméstico
+(Tag 26) é específico do esquema EMIS/Multicaixa e deve ser confirmado com o
+banco adquirente antes de produção; o emolduramento EMVCo e o CRC são
+integralmente conformes e testados.
+
+### 8.5 Logótipo da organização no painel do gestor
+
+`POST /api/organizations/{id}/logo` (`multipart/form-data`, campo `file`) e
+`DELETE` no mesmo endpoint. Só um **MANAGER** da organização pode alterar. Os
+bytes são *sniffed* (apenas PNG/JPEG, ≤ 2 MiB) e guardados em `organization_logos`
+(hash SHA-256); `organizations.logo_url` passa a apontar para o endpoint público
+`GET /api/public/organizations/{id}/logo`. O `POST` no auto-registo e o do painel
+partilham a mesma validação pura (`validateLogoBytes`).
+
+### 8.6 Migração e testes
 
 Migração `0007_b2b_payments`: `PaymentMethod`, valor `UNDER_REVIEW` em
 `TransactionStatus`, colunas `method`/`invoice_number`/`proof_submitted_at`/
 `receipt_sent_at`, e as tabelas `payment_proofs` e `billing_counters`.
+Migração `0013_qr_code_payment`: acrescenta o valor `QR_CODE` a
+`PaymentMethod`. O logótipo já tinha sido introduzido pela migração
+`0012_organization_logo`.
 
-A suite `tests/api/b2b-payments.spec.ts` exercita os três métodos, o upload e
+A suite `tests/api/b2b-payments.spec.ts` exercita os métodos, o upload e
 download do comprovativo, a rejeição de ficheiros falsos, a confirmação de uma
 transação em `UNDER_REVIEW` pelo webhook, o número de fatura sequencial, o
 histórico e o **recibo entregue por SMTP real**. O `payment-methods.test.ts`
 cobre as regras puras (métodos, numeração, detecção de tipo e template do
-recibo em PT/EN).
+recibo em PT/EN) e o `qr-payment.test.ts` cobre o TLV, o CRC-16/CCITT-FALSE, o
+IBAN angolano e a montagem completa do payload EMVCo (dinâmico e estático).
 
 **Limitação honesta:** tal como o adaptador Stripe, o adaptador Multicaixa
 Express (chamada REST real) **não foi exercitado** neste sandbox por não existir

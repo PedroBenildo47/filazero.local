@@ -58,6 +58,35 @@ export function detectedLogoMimeType(bytes: Uint8Array): LogoMimeType | null {
   return detected === "image/png" || detected === "image/jpeg" ? detected : null;
 }
 
+export interface LogoValidationFailure {
+  code: "EMPTY_FILE" | "FILE_TOO_LARGE" | "UNSUPPORTED_FILE";
+  message: string;
+}
+
+/**
+ * Validates a logo upload by its real bytes. Returns `null` when acceptable, or
+ * a structured failure the caller turns into a 422. Shared by self-registration
+ * and the manager panel so both paths apply exactly the same rules.
+ */
+export function validateLogoBytes(bytes: Uint8Array): LogoValidationFailure | null {
+  if (bytes.byteLength === 0) {
+    return { code: "EMPTY_FILE", message: "The uploaded logo is empty." };
+  }
+  if (bytes.byteLength > MAX_LOGO_BYTES) {
+    return {
+      code: "FILE_TOO_LARGE",
+      message: `The organization logo must be smaller than ${MAX_LOGO_BYTES / (1024 * 1024)} MiB.`,
+    };
+  }
+  if (detectedLogoMimeType(bytes) === null) {
+    return {
+      code: "UNSUPPORTED_FILE",
+      message: "The organization logo must be a valid PNG or JPEG image.",
+    };
+  }
+  return null;
+}
+
 export function detectedDocumentMimeType(bytes: Uint8Array): string | null {
   if (
     bytes.length >= 5 &&

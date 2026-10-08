@@ -28,11 +28,12 @@ const png = () =>
 const webp = () =>
   new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
 
-test("the three B2B payment methods are exposed with their transport", () => {
+test("the four B2B payment methods are exposed with their transport", () => {
   const codes = PAYMENT_METHODS.map((method) => method.code);
-  assert.deepEqual(codes, ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "CARD"]);
+  assert.deepEqual(codes, ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "QR_CODE", "CARD"]);
   assert.equal(providerForMethod("MULTICAIXA_EXPRESS"), "INVOICE");
   assert.equal(providerForMethod("BANK_TRANSFER"), "INVOICE");
+  assert.equal(providerForMethod("QR_CODE"), "INVOICE");
   assert.equal(providerForMethod("CARD"), "STRIPE");
 });
 
@@ -40,6 +41,8 @@ test("proof is expected for the reference-based methods only", () => {
   const byCode = Object.fromEntries(PAYMENT_METHODS.map((m) => [m.code, m]));
   assert.equal(byCode.MULTICAIXA_EXPRESS!.requiresProof, true);
   assert.equal(byCode.BANK_TRANSFER!.requiresProof, true);
+  assert.equal(byCode.QR_CODE!.requiresProof, true);
+  assert.equal(byCode.QR_CODE!.hosted, false);
   assert.equal(byCode.CARD!.requiresProof, false);
   assert.equal(byCode.CARD!.hosted, true);
 });
@@ -47,6 +50,7 @@ test("proof is expected for the reference-based methods only", () => {
 test("isPaymentMethod accepts only the known methods", () => {
   assert.equal(isPaymentMethod("CARD"), true);
   assert.equal(isPaymentMethod("MULTICAIXA_EXPRESS"), true);
+  assert.equal(isPaymentMethod("QR_CODE"), true);
   assert.equal(isPaymentMethod("PAYPAL"), false);
   assert.equal(isPaymentMethod(""), false);
   assert.equal(DEFAULT_PAYMENT_METHOD, "MULTICAIXA_EXPRESS");
@@ -85,6 +89,8 @@ test("validatePaymentProof rejects empty, oversized and unknown files", () => {
 test("payment method labels are localised", () => {
   assert.equal(paymentMethodLabel("BANK_TRANSFER", "pt"), "Transferência bancária");
   assert.equal(paymentMethodLabel("BANK_TRANSFER", "en"), "Bank transfer");
+  assert.equal(paymentMethodLabel("QR_CODE", "pt"), "QR Code bancário");
+  assert.equal(paymentMethodLabel("QR_CODE", "en"), "Bank QR code");
   assert.equal(paymentMethodLabel("CARD", "en"), "Visa/Mastercard card");
   assert.equal(paymentMethodLabel("UNKNOWN", "pt"), "UNKNOWN");
 });

@@ -270,16 +270,18 @@ export async function setQueueStatus(
         select: { id: true, userId: true },
       });
       for (const ticket of waiting) {
-        await createNotification(tx, {
-          userId: ticket.userId,
-          type: "QUEUE_STATUS_CHANGED",
-          title: status === "PAUSED" ? "Fila em pausa" : "Fila encerrada",
-          message:
-            status === "PAUSED"
-              ? `A fila "${updated.name}" está temporariamente em pausa.`
-              : `A fila "${updated.name}" foi encerrada.`,
-          ticketId: ticket.id,
-        });
+        if (ticket.userId) {
+          await createNotification(tx, {
+            userId: ticket.userId,
+            type: "QUEUE_STATUS_CHANGED",
+            title: status === "PAUSED" ? "Fila em pausa" : "Fila encerrada",
+            message:
+              status === "PAUSED"
+                ? `A fila "${updated.name}" está temporariamente em pausa.`
+                : `A fila "${updated.name}" foi encerrada.`,
+            ticketId: ticket.id,
+          });
+        }
       }
     }
 

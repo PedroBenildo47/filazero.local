@@ -876,7 +876,7 @@ async function main() {
   eq("frontend: the landing page renders", landing.status, 200);
   ok(
     "frontend: the default language is Portuguese",
-    landingBody.includes("Filas sem confusão"),
+    landingBody.includes("Menos fila. Mais vida."),
   );
   ok(
     "frontend: the language switcher is present",

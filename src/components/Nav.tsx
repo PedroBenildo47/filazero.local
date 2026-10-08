@@ -16,6 +16,9 @@ export function Nav() {
   const { t } = useI18n();
   const pathname = usePathname();
 
+  // The public landing page renders its own marketing header (MarketingHeader).
+  if (pathname === "/") return null;
+
   const isStaff =
     user?.role === "STAFF" || user?.role === "MANAGER" || user?.role === "ADMINISTRATOR";
   const isManager = user?.role === "MANAGER" || user?.role === "ADMINISTRATOR";

@@ -72,6 +72,11 @@ const envSchema = z.object({
   BILLING_BANK_NAME: blankToUndefined(z.string().max(160).optional()),
   BILLING_BANK_ACCOUNT: blankToUndefined(z.string().max(80).optional()),
   BILLING_BANK_IBAN: blankToUndefined(z.string().max(80).optional()),
+  /**
+   * Acquirer GUI (bank identifier) embedded in the domestic template of the
+   * EMVCo bank QR (Tag 26 sub-tag 00). Optional; the scheme may require it.
+   */
+  BILLING_BANK_GUI: blankToUndefined(z.string().max(40).optional()),
   /** Stripe (only needed when PAYMENT_PROVIDER=stripe). */
   STRIPE_SECRET_KEY: blankToUndefined(z.string().min(10).optional()),
   STRIPE_WEBHOOK_SECRET: blankToUndefined(z.string().min(10).optional()),

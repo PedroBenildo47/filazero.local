@@ -156,6 +156,15 @@ utilizador com esse papel (criado via `POST /api/organizations/{id}/members` ou
   acontece no backend, não na UI.
 - `/admin` permite atribuir um plano (entitlement, audit-logged).
 
+## Logótipo da organização
+
+O componente `src/components/OrganizationLogo.tsx` renderiza o logótipo oficial
+(subido em `/gestor` ou no auto-registo) e cai para a inicial da empresa quando
+não existe. É usado no `/fila/[code]`, `/ecra/[queueId]`, `/totem/[queueId]`,
+`/staff`, `/estabelecimento/[id]` e `/pesquisar`. As APIs públicas devolvem o
+`logoUrl` correspondente; as imagens vêm do endpoint público
+`GET /api/public/organizations/{id}/logo` (sem autenticação, cacheável).
+
 ## Por implementar (explícito)
 
 - **i18n PT/EN:** a interface está só em português.

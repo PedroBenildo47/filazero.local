@@ -121,7 +121,7 @@ export async function runBillingSuite(options: {
   reporter.equal(
     "billing: the limits come from the plan",
     overview.data?.limits?.maxBranches,
-    3,
+    trialPlan.maxBranches,
   );
 
   reporter.equal(

@@ -106,6 +106,8 @@ export interface CheckoutResult {
   transaction: ReturnType<typeof serializeTransaction>;
   checkoutUrl: string | null;
   instructions: string | null;
+  /** EMVCo bank QR payload the payer scans; only for QR_CODE. */
+  qrPayload: string | null;
   reference: string;
 }
 
@@ -169,7 +171,13 @@ export async function startCheckout(
     where: { id: transaction.id },
     data: {
       providerReference: session.providerReference,
-      metadata: session.instructions ? { instructions: session.instructions } : undefined,
+      metadata:
+        session.instructions || session.qrPayload
+          ? {
+              ...(session.instructions ? { instructions: session.instructions } : {}),
+              ...(session.qrPayload ? { qrPayload: session.qrPayload } : {}),
+            }
+          : undefined,
     },
   });
 
@@ -187,6 +195,7 @@ export async function startCheckout(
     transaction: serializeTransaction(transaction),
     checkoutUrl: session.checkoutUrl,
     instructions: session.instructions,
+    qrPayload: session.qrPayload,
     reference,
   };
 }

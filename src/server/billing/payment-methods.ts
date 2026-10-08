@@ -21,15 +21,17 @@ export interface PaymentMethodDefinition {
 }
 
 /**
- * The three methods offered at checkout.
+ * The methods offered at checkout.
  *
- * `MULTICAIXA_EXPRESS` and `BANK_TRANSFER` both settle through a quotable
- * reference confirmed by the signed webhook (transport `INVOICE`); `CARD` uses
- * the hosted Stripe Checkout session (transport `STRIPE`).
+ * `MULTICAIXA_EXPRESS`, `BANK_TRANSFER` and `QR_CODE` all settle through a
+ * quotable reference confirmed by the signed webhook (transport `INVOICE`);
+ * `QR_CODE` additionally renders an EMVCo bank QR. `CARD` uses the hosted
+ * Stripe Checkout session (transport `STRIPE`).
  */
 export const PAYMENT_METHODS: readonly PaymentMethodDefinition[] = [
   { code: "MULTICAIXA_EXPRESS", provider: "INVOICE", requiresProof: true, hosted: false },
   { code: "BANK_TRANSFER", provider: "INVOICE", requiresProof: true, hosted: false },
+  { code: "QR_CODE", provider: "INVOICE", requiresProof: true, hosted: false },
   { code: "CARD", provider: "STRIPE", requiresProof: false, hosted: true },
 ];
 

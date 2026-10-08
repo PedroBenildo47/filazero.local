@@ -19,7 +19,8 @@ const FINANCIAL_DOCUMENTS: RegistrationDocumentType[] = [
 ];
 
 export const MAX_REGISTRATION_DOCUMENT_BYTES = 8 * 1024 * 1024;
-export const MAX_REGISTRATION_UPLOAD_BYTES = 34 * 1024 * 1024;
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+export const MAX_REGISTRATION_UPLOAD_BYTES = 36 * 1024 * 1024;
 
 export function isRegistrationDocumentType(value: string): value is RegistrationDocumentType {
   return REGISTRATION_DOCUMENT_TYPES.includes(value as RegistrationDocumentType);
@@ -42,6 +43,19 @@ export function requiredRegistrationDocuments(category: string): RegistrationDoc
   return isFinancialOrganizationCategory(category)
     ? [...FINANCIAL_DOCUMENTS]
     : [...STANDARD_DOCUMENTS];
+}
+
+export const LOGO_MIME_TYPES = ["image/png", "image/jpeg"] as const;
+export type LogoMimeType = (typeof LOGO_MIME_TYPES)[number];
+
+export function isAllowedLogoMimeType(value: string): value is LogoMimeType {
+  return (LOGO_MIME_TYPES as readonly string[]).includes(value);
+}
+
+/** Sniffs an image payload; only PNG and JPEG are accepted for logos. */
+export function detectedLogoMimeType(bytes: Uint8Array): LogoMimeType | null {
+  const detected = detectedDocumentMimeType(bytes);
+  return detected === "image/png" || detected === "image/jpeg" ? detected : null;
 }
 
 export function detectedDocumentMimeType(bytes: Uint8Array): string | null {

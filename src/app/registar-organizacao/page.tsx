@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
@@ -64,6 +64,14 @@ export default function OrganizationRegistrationPage() {
   const [files, setFiles] = useState<Partial<Record<DocumentType, File>>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [planCode, setPlanCode] = useState<string | null>(null);
+
+  // The landing page links here with `?plan=<code>`; once the company is
+  // registered we continue to the public checkout for that plan.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("plan");
+    if (code) setPlanCode(code);
+  }, []);
 
   const financialSector = isFinancialSector(form.category);
   const requiredDocuments = financialSector
@@ -121,7 +129,9 @@ export default function OrganizationRegistrationPage() {
 
       await api("/api/public/organizations/register", { method: "POST", formData: body });
       await refresh();
-      router.replace("/gestor");
+      router.replace(
+      planCode ? `/checkout?plan=${encodeURIComponent(planCode)}` : "/gestor",
+    );
       router.refresh();
     } catch (caught) {
       setError(tError(caught));

@@ -7,6 +7,7 @@ import { useI18n } from "@/components/LanguageProvider";
 import { useQueueStream } from "@/components/useQueueStream";
 import { useSession } from "@/components/SessionProvider";
 import { Alert, Badge, Spinner, StatCard } from "@/components/ui";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 import { queueStatusKey, statusTone } from "@/lib/ui";
 
 interface QueueInfo {
@@ -17,7 +18,7 @@ interface QueueInfo {
   status: string;
   waitingCount: number;
   branch: { id: string; name: string; city: string | null; address: string | null };
-  organization: { id: string; name: string; category: string | null };
+  organization: { id: string; name: string; category: string | null; logoUrl: string | null };
 }
 
 interface ActiveTicket {
@@ -123,11 +124,20 @@ export function QueueView({ queueId }: { queueId: string }) {
         </Link>
       </p>
 
-      <h1>{queue.name}</h1>
-      <p className="muted">
-        {t("queue.organization")}: {queue.organization.name} · {t("queue.branch")}:{" "}
-        {queue.branch.name}
-      </p>
+      <div className="queue-header">
+        <OrganizationLogo
+          logoUrl={queue.organization.logoUrl}
+          name={queue.organization.name}
+          size={56}
+        />
+        <div>
+          <h1 className="queue-header-title">{queue.name}</h1>
+          <p className="muted">
+            {t("queue.organization")}: {queue.organization.name} · {t("queue.branch")}:{" "}
+            {queue.branch.name}
+          </p>
+        </div>
+      </div>
       <p className="muted mono">
         {t("manager.queueCode")}: <strong>{queue.publicCode}</strong>
       </p>

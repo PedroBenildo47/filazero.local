@@ -26,6 +26,12 @@ export WHATSAPP_API_VERSION="${WHATSAPP_API_VERSION:-v21.0}"
 export WHATSAPP_PHONE_NUMBER_ID="${WHATSAPP_PHONE_NUMBER_ID:-123456789}"
 export WHATSAPP_ACCESS_TOKEN="${WHATSAPP_ACCESS_TOKEN:-test-whatsapp-token-0123456789}"
 
+# Angolan bank details so the EMVCo QR checkout path is exercised end to end.
+# The IBAN below is a structurally valid Angola IBAN (mod-97 check passes).
+export BILLING_BANK_NAME="${BILLING_BANK_NAME:-Banco de Teste}"
+export BILLING_BANK_IBAN="${BILLING_BANK_IBAN:-AO06000600000100037131174}"
+export BILLING_BANK_GUI="${BILLING_BANK_GUI:-0040}"
+
 echo "==> Building the application"
 npm run build
 

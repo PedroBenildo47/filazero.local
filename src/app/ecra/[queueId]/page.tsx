@@ -10,13 +10,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { OrganizationLogo } from "@/components/OrganizationLogo";
 
 interface Board {
   queue: {
     id: string;
     name: string;
     status: string;
+    organizationId: string;
     organizationName: string;
+    organizationLogoUrl: string | null;
     branchName: string;
   };
   currentTicketNumber: number | null;
@@ -60,9 +63,24 @@ export default function DisplayBoardPage() {
       }}
     >
       <section style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
-        <p style={{ margin: 0, opacity: 0.7, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          {board?.queue.organizationName ?? "FilaZero"} · {board?.queue.branchName ?? ""}
-        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <OrganizationLogo
+            logoUrl={board?.queue.organizationLogoUrl}
+            name={board?.queue.organizationName ?? "FilaZero"}
+            size={72}
+            variant="dark"
+          />
+          <p
+            style={{
+              margin: 0,
+              opacity: 0.7,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {board?.queue.organizationName ?? "FilaZero"} · {board?.queue.branchName ?? ""}
+          </p>
+        </div>
         <h1 style={{ margin: 0, fontSize: "2rem" }}>{board?.queue.name ?? "A carregar…"}</h1>
         <p style={{ margin: 0, opacity: 0.75, fontSize: "1.25rem" }}>A ATENDER</p>
         <strong style={{ fontSize: "11rem", lineHeight: 1, color: "#22c55e" }}>

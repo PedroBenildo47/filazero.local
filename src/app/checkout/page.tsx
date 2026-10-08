@@ -8,11 +8,14 @@
  * `POST /api/billing/checkout` — it never fakes a payment. The transaction only
  * becomes PAID when the provider confirms it via `POST /api/billing/webhook`.
  *
- * The richer Angolan payment experience (Multicaixa QR, proof upload,
- * confirmation screen) is completed in Fase 3; this is the working entry point.
+ * Angolan payment experience: Multicaixa Express, bank transfer (IBAN) and an
+ * EMVCo bank QR, each with inline proof-of-payment upload. The subscription is
+ * only activated when the provider confirms the payment through the signed
+ * webhook — never on the client.
  */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { QRCodeCanvas } from "qrcode.react";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -47,10 +50,11 @@ interface CheckoutResult {
   };
   checkoutUrl: string | null;
   instructions: string | null;
+  qrPayload: string | null;
   reference: string;
 }
 
-const METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "CARD"] as const;
+const METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "QR_CODE", "CARD"] as const;
 type Method = (typeof METHODS)[number];
 
 function formatKz(cents: number): string {
@@ -69,6 +73,8 @@ function CheckoutFlow() {
   const [method, setMethod] = useState<Method>("MULTICAIXA_EXPRESS");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckoutResult | null>(null);
+  const [proofBusy, setProofBusy] = useState(false);
+  const [proofSent, setProofSent] = useState(false);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("plan");
@@ -106,6 +112,7 @@ function CheckoutFlow() {
     if (!plan || !organization) return;
     setBusy(true);
     setError(null);
+    setProofSent(false);
     try {
       const data = await api<CheckoutResult>("/api/billing/checkout", {
         method: "POST",
@@ -116,6 +123,34 @@ function CheckoutFlow() {
       setError(tError(caught));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function downloadQr() {
+    const canvas = document.getElementById("checkout-bank-qr") as HTMLCanvasElement | null;
+    if (!canvas || !result) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `filazero-qr-${result.reference}.png`;
+    link.click();
+  }
+
+  async function submitProof(transactionId: string, file: File) {
+    if (!organization) return;
+    setProofBusy(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await api(`/api/organizations/${organization.id}/transactions/${transactionId}/proof`, {
+        method: "POST",
+        formData,
+      });
+      setProofSent(true);
+    } catch (caught) {
+      setError(tError(caught));
+    } finally {
+      setProofBusy(false);
     }
   }
 
@@ -164,6 +199,44 @@ function CheckoutFlow() {
               <h3>{t("checkout.instructions")}</h3>
               <pre className="instructions">{result.instructions}</pre>
             </>
+          ) : null}
+
+          {result.qrPayload ? (
+            <div className="qr-checkout">
+              <h3>{t("checkout.qrTitle")}</h3>
+              <p className="muted">{t("checkout.qrHint")}</p>
+              <QRCodeCanvas id="checkout-bank-qr" value={result.qrPayload} size={224} level="M" />
+              <div>
+                <button type="button" className="btn btn-ghost" onClick={downloadQr}>
+                  {t("checkout.qrDownload")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {result.transaction.method !== "CARD" ? (
+            <div className="stack" style={{ gap: "0.5rem" }}>
+              <h3>{t("billing.proofTitle")}</h3>
+              <p className="muted">{t("billing.proofHint")}</p>
+              {proofSent ? (
+                <Alert kind="success">{t("billing.proofSent")}</Alert>
+              ) : (
+                <label className="btn btn-ghost">
+                  {proofBusy ? t("common.loading") : t("billing.proofUpload")}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    hidden
+                    disabled={proofBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void submitProof(result.transaction.id, file);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
           ) : null}
 
           <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>

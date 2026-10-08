@@ -103,6 +103,7 @@ const RECEIPT_COPY = {
 const PAYMENT_METHOD_LABELS: Record<string, { pt: string; en: string }> = {
   MULTICAIXA_EXPRESS: { pt: "Multicaixa Express", en: "Multicaixa Express" },
   BANK_TRANSFER: { pt: "Transferência bancária", en: "Bank transfer" },
+  QR_CODE: { pt: "QR Code bancário", en: "Bank QR code" },
   CARD: { pt: "Cartão Visa/Mastercard", en: "Visa/Mastercard card" },
 };
 

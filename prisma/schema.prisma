@@ -132,6 +132,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   auditLogs           AuditLog[]           @relation("AuditActor")
   paymentProofs       PaymentProof[]
+  atmReports          AtmReport[]
 
   @@index([role, status])
   @@map("users")
@@ -664,6 +665,77 @@ model PaymentProof {
 
   @@index([transactionId, createdAt])
   @@map("payment_proofs")
+}
+
+// ---------------------------------------------------------------------------
+// ATM network (Multicaixa) — location and cash status
+// ---------------------------------------------------------------------------
+
+/// Availability of an ATM (cash / terminal).
+enum AtmStatus {
+  /// Has cash and is serving.
+  OPERATIONAL
+  /// Terminal works but has run out of cash.
+  OUT_OF_CASH
+  /// Terminal is out of service.
+  OFFLINE
+  /// No recent information.
+  UNKNOWN
+}
+
+/// Who last reported an ATM's status.
+enum AtmReportSource {
+  COMMUNITY
+  MANAGER
+  ADMIN
+  FEED
+}
+
+/// A Multicaixa ATM / bank agency cash point.
+model Atm {
+  id             String    @id @default(uuid()) @db.Uuid
+  bank           String    @db.VarChar(120)
+  label          String?   @db.VarChar(160)
+  address        String    @db.VarChar(255)
+  city           String    @db.VarChar(120)
+  province       String?   @db.VarChar(120)
+  latitude       Float
+  longitude      Float
+  status         AtmStatus @default(UNKNOWN)
+  /// Optional cash level (0-100) when a feed provides it.
+  cashLevel      Int?      @map("cash_level")
+  notes          String?   @db.VarChar(300)
+  active         Boolean   @default(true)
+  lastReportedAt DateTime  @default(now()) @map("last_reported_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reports AtmReport[]
+
+  @@index([city, status])
+  @@index([status])
+  @@index([bank])
+  @@map("atms")
+}
+
+/// A status report for an ATM (community, manager, admin or an external feed).
+model AtmReport {
+  id             String          @id @default(uuid()) @db.Uuid
+  atmId          String          @map("atm_id") @db.Uuid
+  status         AtmStatus
+  note           String?         @db.VarChar(300)
+  source         AtmReportSource @default(COMMUNITY)
+  reporterUserId String?         @map("reporter_user_id") @db.Uuid
+  /// Optional display name for anonymous community reports.
+  reporterName   String?         @map("reporter_name") @db.VarChar(120)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  atm      Atm    @relation(fields: [atmId], references: [id], onDelete: Cascade)
+  reporter User?  @relation(fields: [reporterUserId], references: [id], onDelete: SetNull)
+
+  @@index([atmId, createdAt])
+  @@index([source, createdAt])
+  @@map("atm_reports")
 }
 
 /// Atomic per-period counters (e.g. yearly invoice sequence).

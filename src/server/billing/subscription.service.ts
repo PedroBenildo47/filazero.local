@@ -6,7 +6,7 @@
  * the decision needs the database, and Edge middleware cannot query PostgreSQL.
  */
 import "server-only";
-import type { Plan, Subscription } from "@prisma/client";
+import type { Plan, Subscription, SubscriptionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
@@ -61,6 +61,12 @@ export interface BillingOverview {
     maxStaff: number;
   } | null;
   operational: boolean;
+  /**
+   * The status shown to the customer. It reports `EXPIRED` as soon as the paid
+   * period ends (even if the stored row still says TRIALING/ACTIVE), so the
+   * automatic block on unpaid subscriptions is visible.
+   */
+  effectiveStatus: SubscriptionStatus | "EXPIRED" | null;
   daysRemaining: number | null;
 }
 
@@ -73,6 +79,11 @@ export async function getBillingOverview(
   ]);
 
   const operational = isSubscriptionOperational(subscription);
+  const effectiveStatus = subscription
+    ? operational
+      ? subscription.status
+      : ("EXPIRED" as const)
+    : null;
   const daysRemaining = subscription
     ? Math.max(
         0,
@@ -93,6 +104,7 @@ export async function getBillingOverview(
         }
       : null,
     operational,
+    effectiveStatus,
     daysRemaining,
   };
 }

@@ -314,10 +314,78 @@ export async function runPlatformAdminSuite(options: {
     /* RBAC: only the platform admin reaches the panel                      */
     /* ------------------------------------------------------------------ */
 
+    /* ------------------------------------------------------------------ */
+    /* Force deletion of an organization with paid transactions            */
+    /* ------------------------------------------------------------------ */
+
+    const forced = await admin.client.request<{
+      deleted: boolean;
+      forced: boolean;
+    }>(`/api/admin/organizations/${organizationCId}`, {
+      method: "DELETE",
+      json: { confirmName: orgCRow?.name ?? "", force: true },
+    });
+    reporter.equal("platform admin: forced deletion succeeds", forced.status, 200);
+    reporter.equal("platform admin: forced deletion is reported", forced.data?.forced, true);
+    reporter.check(
+      "platform admin: forced organization is really removed",
+      (await db.organization.findUnique({ where: { id: organizationCId } })) === null,
+    );
+    const forcedAudit = await db.auditLog.findFirst({
+      where: { action: "platform.organization_deleted", entityId: organizationCId },
+      orderBy: { createdAt: "desc" },
+    });
+    reporter.check(
+      "platform admin: forced deletion snapshots the fiscal trail",
+      JSON.stringify(forcedAudit?.metadata ?? {}).includes("fiscalSnapshot"),
+    );
+
+    /* ------------------------------------------------------------------ */
+    /* Monitoring: overview, alerts and system health                      */
+    /* ------------------------------------------------------------------ */
+
+    const overview = await admin.client.get<{
+      organizations: { total: number };
+      users: { total: number };
+      activity: { activeQueues: number; ticketsToday: number; waitingTickets: number };
+      growth: { organizationsByWeek: unknown[]; usersByWeek: unknown[] };
+    }>("/api/admin/overview");
+    reporter.equal("platform admin: overview responds", overview.status, 200);
+    reporter.check(
+      "platform admin: overview carries global KPIs and growth buckets",
+      typeof overview.data?.organizations.total === "number" &&
+        typeof overview.data?.users.total === "number" &&
+        Array.isArray(overview.data?.growth.organizationsByWeek) &&
+        (overview.data?.growth.organizationsByWeek.length ?? 0) > 0,
+    );
+
+    const alerts = await admin.client.get<unknown[]>("/api/admin/alerts");
+    reporter.equal("platform admin: alerts respond", alerts.status, 200);
+    reporter.check("platform admin: alerts are a list", Array.isArray(alerts.data));
+
+    const health = await admin.client.get<{
+      status: string;
+      database: { reachable: boolean; latencyMs: number | null };
+      counters: { pendingTransactions: number };
+    }>("/api/admin/health");
+    reporter.equal("platform admin: system health responds", health.status, 200);
+    reporter.equal(
+      "platform admin: health reports the database as reachable",
+      health.data?.database.reachable,
+      true,
+    );
+    reporter.check(
+      "platform admin: health reports a database latency",
+      typeof health.data?.database.latencyMs === "number",
+    );
+
     const adminPaths = [
       "/api/admin/organizations",
       "/api/admin/finance",
       "/api/admin/audit-logs",
+      "/api/admin/overview",
+      "/api/admin/alerts",
+      "/api/admin/health",
       `/api/admin/organizations/${organizationBId}`,
     ];
     for (const path of adminPaths) {

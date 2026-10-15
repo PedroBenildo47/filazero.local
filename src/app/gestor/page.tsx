@@ -83,6 +83,7 @@ interface BillingOverview {
   usage: { branches: number; queues: number; staff: number };
   limits: { maxBranches: number; maxQueuesPerBranch: number; maxStaff: number } | null;
   operational: boolean;
+  effectiveStatus: string | null;
   daysRemaining: number | null;
 }
 interface Transaction {
@@ -546,10 +547,8 @@ function ManagerDashboard() {
                   <StatCard
                     label={t("billing.status")}
                     value={
-                      <Badge tone={statusTone(billing.subscription?.status ?? "EXPIRED")}>
-                        {t(
-                          subscriptionStatusKey(billing.subscription?.status ?? "EXPIRED"),
-                        )}
+                      <Badge tone={statusTone(billing.effectiveStatus ?? "EXPIRED")}>
+                        {t(subscriptionStatusKey(billing.effectiveStatus ?? "EXPIRED"))}
                       </Badge>
                     }
                     tone={billing.operational ? "ok" : "danger"}

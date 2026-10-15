@@ -28,8 +28,8 @@ interface Plan {
   maxStaff: number;
 }
 
-/** Recommended plan highlighted on the showcase. */
-const RECOMMENDED_CODE = "growth";
+/** Recommended plan highlighted on the showcase (the 2.000 Kz/month plan). */
+const RECOMMENDED_CODE = "starter";
 
 /** Formats a price given in cents as Angolan Kwanzas, e.g. `100.000 Kz`. */
 function formatKz(cents: number): string {

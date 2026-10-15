@@ -53,6 +53,9 @@ export function analyticsReportLabels(lang: Lang): AnalyticsReportLabels {
     weekStart: t["analytics.weekStart"],
     queuePerformance: t["analytics.queuePerformance"],
     branchPerformance: t["analytics.branchPerformance"],
+    staffPerformance: t["analytics.staffPerformance"],
+    staff: t["analytics.staff"],
+    servedTickets: t["analytics.servedTickets"],
     branch: t["analytics.branch"],
     queue: t["analytics.queue"],
     completed: t["analytics.completed"],
@@ -69,6 +72,7 @@ export function analyticsReportLabels(lang: Lang): AnalyticsReportLabels {
       NO_SHOW: t["analytics.status.NO_SHOW"],
     },
     hourly: t["analytics.completedByHour"],
+    issuedHourly: t["analytics.issuedByHour"],
     hour: t["analytics.hour"],
   };
 }

@@ -26,6 +26,10 @@ export WHATSAPP_API_VERSION="${WHATSAPP_API_VERSION:-v21.0}"
 export WHATSAPP_PHONE_NUMBER_ID="${WHATSAPP_PHONE_NUMBER_ID:-123456789}"
 export WHATSAPP_ACCESS_TOKEN="${WHATSAPP_ACCESS_TOKEN:-test-whatsapp-token-0123456789}"
 
+# The suite registers many users from one IP; lift the per-IP register cap so
+# the production policy (50/hour) does not abort the run.
+export RATE_LIMIT_REGISTER_MAX="${RATE_LIMIT_REGISTER_MAX:-1000}"
+
 # Angolan bank details so the EMVCo QR checkout path is exercised end to end.
 # The IBAN below is a structurally valid Angola IBAN (mod-97 check passes).
 export BILLING_BANK_NAME="${BILLING_BANK_NAME:-Banco de Teste}"

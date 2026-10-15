@@ -133,6 +133,8 @@ model User {
   auditLogs           AuditLog[]           @relation("AuditActor")
   paymentProofs       PaymentProof[]
   atmReports          AtmReport[]
+  customerSubscription CustomerSubscription?
+  customerPayments     CustomerPayment[]
 
   @@index([role, status])
   @@map("users")
@@ -736,6 +738,76 @@ model AtmReport {
   @@index([atmId, createdAt])
   @@index([source, createdAt])
   @@map("atm_reports")
+}
+
+// ---------------------------------------------------------------------------
+// End-customer subscription (B2C): 1 month free, then 2.000 Kz / month
+// ---------------------------------------------------------------------------
+
+/// One subscription per end-customer account.
+model CustomerSubscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @unique @map("user_id") @db.Uuid
+  status             SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime           @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  startedAt          DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  cancelledAt        DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments CustomerPayment[]
+
+  @@index([status, currentPeriodEnd])
+  @@map("customer_subscriptions")
+}
+
+/// A B2C payment attempt for the end-customer subscription.
+model CustomerPayment {
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @map("user_id") @db.Uuid
+  subscriptionId    String?           @map("subscription_id") @db.Uuid
+  status            TransactionStatus @default(PENDING)
+  method            PaymentMethod     @default(MULTICAIXA_EXPRESS)
+  provider          PaymentProvider   @default(INVOICE)
+  amountCents       Int               @map("amount_cents")
+  currency          String            @db.VarChar(3)
+  reference         String            @unique @db.VarChar(64)
+  providerReference String?           @map("provider_reference") @db.VarChar(200)
+  providerEventId   String?           @unique @map("provider_event_id") @db.VarChar(200)
+  proofSubmittedAt  DateTime?         @map("proof_submitted_at") @db.Timestamptz(6)
+  paidAt            DateTime?         @map("paid_at") @db.Timestamptz(6)
+  failureReason     String?           @map("failure_reason") @db.VarChar(300)
+  metadata          Json?
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription CustomerSubscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  proofs       CustomerPaymentProof[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("customer_payments")
+}
+
+/// Proof of payment for a B2C subscription payment.
+model CustomerPaymentProof {
+  id        String   @id @default(uuid()) @db.Uuid
+  paymentId String   @map("payment_id") @db.Uuid
+  fileName  String   @map("file_name") @db.VarChar(255)
+  mimeType  String   @map("mime_type") @db.VarChar(100)
+  sizeBytes Int      @map("size_bytes")
+  sha256    String   @db.Char(64)
+  content   Bytes    @db.ByteA
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment CustomerPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+  @@map("customer_payment_proofs")
 }
 
 /// Atomic per-period counters (e.g. yearly invoice sequence).

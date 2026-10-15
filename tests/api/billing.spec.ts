@@ -419,4 +419,16 @@ export async function runBillingSuite(options: {
     "billing: transactions are persisted with their final status",
     persisted.some((transaction) => transaction.status === "SUCCEEDED"),
   );
+
+  // Clean up the fixtures this suite created, so a real database is not left
+  // with a "Billing …" organization (and the test plan) after the run.
+  await db.organization
+    .delete({ where: { id: organizationId } })
+    .catch(() => undefined);
+  await db.plan.delete({ where: { code: "test-tiny" } }).catch(() => undefined);
+  await db.user
+    .deleteMany({
+      where: { id: { in: [admin.userId, customer.userId, managerUser.userId] } },
+    })
+    .catch(() => undefined);
 }

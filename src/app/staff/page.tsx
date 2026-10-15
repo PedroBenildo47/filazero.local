@@ -46,7 +46,13 @@ interface TicketRow {
   user: { id: string; name: string; phone?: string | null };
 }
 interface QueueState {
-  queue: { id: string; name: string; status: string; description: string | null };
+  queue: {
+    id: string;
+    name: string;
+    prefix: string | null;
+    status: string;
+    description: string | null;
+  };
   branch: { id: string; name: string; city: string | null };
   organization: { id: string; name: string; logoUrl: string | null };
   current: TicketRow | null;
@@ -73,6 +79,7 @@ function StaffDashboard() {
   const [queueId, setQueueId] = useState("");
 
   const [state, setState] = useState<QueueState | null>(null);
+  const [transferTo, setTransferTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -310,7 +317,10 @@ function StaffDashboard() {
             ) : (
               <div className="service-row">
                 <div>
-                  <span className="ticket-number">#{state.current.ticketNumber}</span>
+                  <span className="ticket-number">
+                    {state.queue.prefix ?? ""}
+                    {state.current.ticketNumber}
+                  </span>
                   <div style={{ margin: "0.5rem 0" }}>
                     <Person name={state.current.user.name} meta={state.current.user.phone} />
                   </div>
@@ -349,6 +359,17 @@ function StaffDashboard() {
                       {t("staff.complete")}
                     </button>
                   )}
+                  {(state.current.status === "CALLED" ||
+                    state.current.status === "SERVING") && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={busy}
+                      onClick={() => void act(`/api/tickets/${state.current!.id}/recall`)}
+                    >
+                      {t("staff.recall")}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"
@@ -362,6 +383,32 @@ function StaffDashboard() {
                     }}
                   >
                     {t("staff.cancel")}
+                  </button>
+                  <select
+                    className="input input-sm"
+                    value={transferTo}
+                    onChange={(event) => setTransferTo(event.target.value)}
+                  >
+                    <option value="">{t("staff.transferTo")}</option>
+                    {queues
+                      .filter((queue) => queue.id !== queueId && queue.status === "OPEN")
+                      .map((queue) => (
+                        <option key={queue.id} value={queue.id}>
+                          {queue.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={busy || !transferTo}
+                    onClick={() => {
+                      void act(`/api/tickets/${state.current!.id}/transfer`, "POST", {
+                        queueId: transferTo,
+                      }).then(() => setTransferTo(""));
+                    }}
+                  >
+                    {t("staff.transfer")}
                   </button>
                 </div>
               </div>

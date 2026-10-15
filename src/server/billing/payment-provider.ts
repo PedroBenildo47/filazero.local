@@ -17,14 +17,27 @@ import { randomBytes } from "node:crypto";
 import type {
   PaymentMethod as PaymentMethodName,
   PaymentProvider as PaymentProviderName,
-  Plan,
-  Transaction,
 } from "@prisma/client";
 import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
 import { createMulticaixaRequest } from "./multicaixa";
 import { providerForMethod } from "./payment-methods";
 import { buildAngolaBankQr, isValidAngolaIban, normalizeIban } from "./qr-payment";
+
+/** Minimal shape the checkout adapters need from a payable subject. */
+export interface CheckoutSubject {
+  reference: string;
+  amountCents: number;
+  currency: string;
+}
+
+/** Minimal shape the checkout adapters need from a plan. */
+export interface CheckoutPlan {
+  name: string;
+  priceCents: number;
+  currency: string;
+  interval: string;
+}
 
 export interface CheckoutSession {
   provider: PaymentProviderName;
@@ -41,7 +54,7 @@ export function generatePaymentReference(): string {
   return `FZ-${randomBytes(8).toString("hex").toUpperCase()}`;
 }
 
-function bankInstructions(reference: string, plan: Plan): string | null {
+function bankInstructions(reference: string, plan: CheckoutPlan): string | null {
   const env = getEnv();
   const lines: string[] = [
     `Referência: ${reference}`,
@@ -61,7 +74,7 @@ function formatAmount(priceCents: number, currency: string): string {
   return `${(priceCents / 100).toFixed(2)} ${currency}`;
 }
 
-function qrInstructions(reference: string, plan: Plan): string {
+function qrInstructions(reference: string, plan: CheckoutPlan): string {
   const env = getEnv();
   const lines: string[] = [
     "Pagamento por QR Code bancário (EMVCo)",
@@ -80,7 +93,7 @@ function qrInstructions(reference: string, plan: Plan): string {
   return lines.join("\n");
 }
 
-function buildCheckoutUrl(reference: string, plan: Plan): string | null {
+function buildCheckoutUrl(reference: string, plan: CheckoutPlan): string | null {
   const template = getEnv().PAYMENT_CHECKOUT_URL_TEMPLATE;
   if (!template) return null;
   return template
@@ -90,8 +103,8 @@ function buildCheckoutUrl(reference: string, plan: Plan): string | null {
 }
 
 async function createStripeCheckout(
-  transaction: Transaction,
-  plan: Plan,
+  subject: CheckoutSubject,
+  plan: CheckoutPlan,
 ): Promise<CheckoutSession> {
   const env = getEnv();
   if (!env.STRIPE_SECRET_KEY) {
@@ -103,7 +116,7 @@ async function createStripeCheckout(
 
   const body = new URLSearchParams({
     mode: "payment",
-    client_reference_id: transaction.reference,
+    client_reference_id: subject.reference,
     success_url: `${env.APP_URL}/gestor?checkout=success`,
     cancel_url: `${env.APP_URL}/gestor?checkout=cancelled`,
     "line_items[0][quantity]": "1",
@@ -111,7 +124,7 @@ async function createStripeCheckout(
     "line_items[0][price_data][unit_amount]": String(plan.priceCents),
     "line_items[0][price_data][product_data][name]": plan.name,
   });
-  body.set("metadata[reference]", transaction.reference);
+  body.set("metadata[reference]", subject.reference);
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -141,21 +154,21 @@ async function createStripeCheckout(
 }
 
 export async function createCheckoutSession(
-  transaction: Transaction,
-  plan: Plan,
+  subject: CheckoutSubject,
+  plan: CheckoutPlan,
   method: PaymentMethodName,
 ): Promise<CheckoutSession> {
   const env = getEnv();
 
   if (method === "CARD") {
-    return createStripeCheckout(transaction, plan);
+    return createStripeCheckout(subject, plan);
   }
 
   if (method === "MULTICAIXA_EXPRESS") {
     const result = await createMulticaixaRequest({
-      reference: transaction.reference,
-      amountCents: transaction.amountCents,
-      currency: transaction.currency,
+      reference: subject.reference,
+      amountCents: subject.amountCents,
+      currency: subject.currency,
       description: `Subscrição FilaZero — ${plan.name}`,
       callbackUrl: `${env.APP_URL}/api/billing/webhook`,
     });
@@ -180,15 +193,15 @@ export async function createCheckoutSession(
       iban,
       merchantName: env.BILLING_BANK_NAME ?? env.PLATFORM_LEGAL_NAME,
       merchantCity: env.PLATFORM_CITY ?? null,
-      amountCents: transaction.amountCents,
-      reference: transaction.reference,
+      amountCents: subject.amountCents,
+      reference: subject.reference,
       acquirerGui: env.BILLING_BANK_GUI ?? null,
     });
     return {
       provider: providerForMethod(method),
-      providerReference: transaction.reference,
+      providerReference: subject.reference,
       checkoutUrl: null,
-      instructions: qrInstructions(transaction.reference, plan),
+      instructions: qrInstructions(subject.reference, plan),
       qrPayload,
     };
   }
@@ -196,9 +209,9 @@ export async function createCheckoutSession(
   // Bank transfer: a real, quotable reference plus the bank details.
   return {
     provider: providerForMethod(method),
-    providerReference: transaction.reference,
-    checkoutUrl: buildCheckoutUrl(transaction.reference, plan),
-    instructions: bankInstructions(transaction.reference, plan),
+    providerReference: subject.reference,
+    checkoutUrl: buildCheckoutUrl(subject.reference, plan),
+    instructions: bankInstructions(subject.reference, plan),
     qrPayload: null,
   };
 }

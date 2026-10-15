@@ -40,6 +40,19 @@ async function assertBranchBelongsToOrganization(
   }
 }
 
+async function assertCounterBelongsToOrganization(
+  organizationId: string,
+  counterId: string,
+): Promise<void> {
+  const counter = await db.counter.findFirst({
+    where: { id: counterId, organizationId },
+    select: { id: true },
+  });
+  if (!counter) {
+    throw AppError.badRequest("Counter does not belong to this organization");
+  }
+}
+
 async function countActiveManagers(organizationId: string): Promise<number> {
   return db.organizationMember.count({
     where: { organizationId, role: "MANAGER", status: "ACTIVE" },
@@ -63,6 +76,7 @@ export async function listMembers(
       include: {
         user: { select: { id: true, name: true, email: true, phone: true, role: true, status: true } },
         branch: { select: { id: true, name: true } },
+        counter: { select: { id: true, name: true } },
       },
     }),
     db.organizationMember.count({ where: { organizationId } }),
@@ -73,6 +87,7 @@ export async function listMembers(
       ...publicMember(member),
       user: member.user,
       branch: member.branch,
+      counter: member.counter,
     })),
     total,
     page: pagination.page,
@@ -101,6 +116,10 @@ export async function addMember(
   const branchId = input.branchId ?? null;
   if (branchId) {
     await assertBranchBelongsToOrganization(organizationId, branchId);
+  }
+  const counterId = input.counterId ?? null;
+  if (counterId) {
+    await assertCounterBelongsToOrganization(organizationId, counterId);
   }
 
   const member = await db.$transaction(async (tx) => {
@@ -138,6 +157,7 @@ export async function addMember(
         userId: userId!,
         organizationId,
         branchId,
+        counterId,
         role: input.role,
         status: "ACTIVE",
       },
@@ -176,6 +196,11 @@ export async function updateMember(
   if (branchId) {
     await assertBranchBelongsToOrganization(organizationId, branchId);
   }
+  const counterId =
+    input.counterId === undefined ? existing.counterId : input.counterId ?? null;
+  if (counterId) {
+    await assertCounterBelongsToOrganization(organizationId, counterId);
+  }
 
   // Never let an organization lose its last active manager.
   const losesManager =
@@ -194,6 +219,7 @@ export async function updateMember(
         ...(input.role === undefined ? {} : { role: input.role }),
         ...(input.status === undefined ? {} : { status: input.status }),
         branchId,
+        counterId,
       },
     });
 

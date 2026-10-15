@@ -127,6 +127,14 @@ export interface AnalyticsStatusCount {
   count: number;
 }
 
+export interface AnalyticsStaffPerformance {
+  staffId: string;
+  staffName: string;
+  servedTickets: number;
+  averageWaitSeconds: number | null;
+  averageServiceSeconds: number | null;
+}
+
 export interface AnalyticsPeak {
   /** Day with the most tickets issued, or `null` when the period has no data. */
   busiestDay: { date: string; count: number } | null;
@@ -141,7 +149,9 @@ export interface OrganizationAnalyticsReport {
   issuedByWeek: Array<{ weekStart: string; count: number }>;
   queuePerformance: AnalyticsQueuePerformance[];
   branchPerformance: AnalyticsBranchPerformance[];
+  staffPerformance: AnalyticsStaffPerformance[];
   statusDistribution: AnalyticsStatusCount[];
+  issuedByHour: Array<{ hour: number; count: number }>;
   completedByHour: Array<{ hour: number; count: number }>;
   peak: AnalyticsPeak;
 }

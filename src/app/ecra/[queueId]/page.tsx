@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Waiting-room display (Fase 4 · Bloco 4).
+ * Waiting-room display (TV mode).
  *
- * Public TV board: shows the ticket being served and the next ones waiting. It
- * only ever renders ticket numbers — never a customer name — so it is safe to
- * leave on a screen. Polls the public board endpoint every 3 seconds.
+ * Public, high-contrast board: the ticket being served, the next ones waiting
+ * and the last called tickets (so someone who missed the first call can catch
+ * up). It only ever renders ticket numbers — never a customer name.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -17,6 +17,7 @@ interface Board {
     id: string;
     name: string;
     status: string;
+    publicCode: string;
     organizationId: string;
     organizationName: string;
     organizationLogoUrl: string | null;
@@ -24,8 +25,16 @@ interface Board {
   };
   currentTicketNumber: number | null;
   waiting: { ticketNumber: number; position: number }[];
+  recent: { ticketNumber: number; status: string; at: string }[];
   waitingCount: number;
   kioskEnabled: boolean;
+}
+
+function timeOf(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-PT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function DisplayBoardPage() {
@@ -48,74 +57,69 @@ export default function DisplayBoardPage() {
     return () => window.clearInterval(id);
   }, [load]);
 
-  const next = board?.waiting.slice(0, 5) ?? [];
+  const next = board?.waiting.slice(0, 4) ?? [];
+  const recent = board?.recent ?? [];
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: "2rem",
-        padding: "3rem",
-        background: "#0b1220",
-        color: "#f8fafc",
-      }}
-    >
-      <section style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+    <main className="tv">
+      <header className="tv-head">
+        <div className="tv-brand">
           <OrganizationLogo
             logoUrl={board?.queue.organizationLogoUrl}
             name={board?.queue.organizationName ?? "FilaZero"}
-            size={72}
+            size={64}
             variant="dark"
           />
-          <p
-            style={{
-              margin: 0,
-              opacity: 0.7,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {board?.queue.organizationName ?? "FilaZero"} · {board?.queue.branchName ?? ""}
-          </p>
+          <div>
+            <p className="tv-org">
+              {board?.queue.organizationName ?? "FilaZero"} · {board?.queue.branchName ?? ""}
+            </p>
+            <h1 className="tv-queue">{board?.queue.name ?? "A carregar…"}</h1>
+          </div>
         </div>
-        <h1 style={{ margin: 0, fontSize: "2rem" }}>{board?.queue.name ?? "A carregar…"}</h1>
-        <p style={{ margin: 0, opacity: 0.75, fontSize: "1.25rem" }}>A ATENDER</p>
-        <strong style={{ fontSize: "11rem", lineHeight: 1, color: "#22c55e" }}>
-          {board?.currentTicketNumber ?? "—"}
-        </strong>
-        {board && board.queue.status !== "OPEN" ? (
-          <p style={{ margin: 0, opacity: 0.75 }}>Fila fechada</p>
-        ) : null}
-      </section>
+        <div className="tv-clock">{timeOf(new Date().toISOString())}</div>
+      </header>
 
-      <section style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1rem" }}>
-        <p style={{ margin: 0, opacity: 0.75, fontSize: "1.25rem" }}>PRÓXIMAS</p>
-        {next.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Sem senhas em espera</p>
-        ) : (
-          <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.75rem" }}>
-            {next.map((item) => (
-              <li
-                key={item.ticketNumber}
-                style={{
-                  fontSize: "2.5rem",
-                  fontWeight: 700,
-                  padding: "0.75rem 1.25rem",
-                  borderRadius: "1rem",
-                  background: "rgba(248,250,252,0.08)",
-                }}
-              >
-                {item.ticketNumber}
-              </li>
-            ))}
-          </ol>
-        )}
-        <p style={{ opacity: 0.6, fontSize: "0.95rem" }}>
-          {board?.waitingCount ?? 0} em espera
-        </p>
+      <section className="tv-grid">
+        <div className="tv-current">
+          <p className="tv-label">A ATENDER</p>
+          <strong className="tv-current-number">
+            {board?.currentTicketNumber ?? "—"}
+          </strong>
+          {board && board.queue.status !== "OPEN" ? (
+            <p className="tv-closed">FILA FECHADA</p>
+          ) : null}
+        </div>
+
+        <div className="tv-col">
+          <p className="tv-label">PRÓXIMAS</p>
+          {next.length === 0 ? (
+            <p className="tv-empty">Sem senhas em espera</p>
+          ) : (
+            <ol className="tv-list">
+              {next.map((item) => (
+                <li key={item.ticketNumber}>{item.ticketNumber}</li>
+              ))}
+            </ol>
+          )}
+          <p className="tv-waiting">{board?.waitingCount ?? 0} em espera</p>
+        </div>
+
+        <div className="tv-col">
+          <p className="tv-label">ÚLTIMAS CHAMADAS</p>
+          {recent.length === 0 ? (
+            <p className="tv-empty">Sem chamadas recentes</p>
+          ) : (
+            <ol className="tv-list tv-list-small">
+              {recent.map((item) => (
+                <li key={`${item.ticketNumber}-${item.at}`}>
+                  <span className="tv-recent-number">{item.ticketNumber}</span>
+                  <span className="tv-recent-time">{timeOf(item.at)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </section>
     </main>
   );

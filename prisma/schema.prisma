@@ -133,6 +133,7 @@ model User {
   auditLogs           AuditLog[]           @relation("AuditActor")
   paymentProofs       PaymentProof[]
   atmReports          AtmReport[]
+  servedTickets        Ticket[]             @relation("TicketServedBy")
   customerSubscription CustomerSubscription?
   customerPayments     CustomerPayment[]
 
@@ -336,6 +337,8 @@ model Ticket {
   /// Optional walk-in identity captured at the kiosk.
   guestName    String?      @map("guest_name") @db.VarChar(120)
   guestPhone   String?      @map("guest_phone") @db.VarChar(32)
+  /// Staff member who called/served this ticket (attribution for reports).
+  servedById   String?      @map("served_by_id") @db.Uuid
   /// Sequential per queue (1, 2, 3, ...). Generated inside a transaction.
   ticketNumber Int          @map("ticket_number")
   status       TicketStatus @default(WAITING)
@@ -353,6 +356,7 @@ model Ticket {
 
   queue          Queue          @relation("QueueTickets", fields: [queueId], references: [id], onDelete: Cascade)
   user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servedBy       User?          @relation("TicketServedBy", fields: [servedById], references: [id], onDelete: SetNull)
   currentInQueue Queue?         @relation("QueueCurrentTicket")
   notifications  Notification[]
 
@@ -362,6 +366,8 @@ model Ticket {
   // Client dashboard: "my active tickets".
   @@index([userId, status])
   @@index([userId, createdAt])
+  // Per-staff performance reports.
+  @@index([servedById, status])
   @@map("tickets")
 }
 

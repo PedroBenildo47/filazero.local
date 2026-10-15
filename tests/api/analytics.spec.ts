@@ -12,6 +12,14 @@ interface AnalyticsResponse {
     averageServiceSeconds: number | null;
   }>;
   completedByHour: Array<{ hour: number; count: number }>;
+  issuedByHour: Array<{ hour: number; count: number }>;
+  staffPerformance: Array<{
+    staffId: string;
+    staffName: string;
+    servedTickets: number;
+    averageWaitSeconds: number | null;
+    averageServiceSeconds: number | null;
+  }>;
 }
 
 export async function runAnalyticsSuite(options: {
@@ -104,6 +112,7 @@ export async function runAnalyticsSuite(options: {
         {
           queueId: queueA.id,
           userId: customer.userId,
+          servedById: managerA.userId,
           ticketNumber: 1,
           status: "COMPLETED",
           joinedAt: firstJoinedAt,
@@ -113,6 +122,7 @@ export async function runAnalyticsSuite(options: {
         {
           queueId: queueA.id,
           userId: customer.userId,
+          servedById: managerA.userId,
           ticketNumber: 2,
           status: "COMPLETED",
           joinedAt: secondJoinedAt,
@@ -147,6 +157,21 @@ export async function runAnalyticsSuite(options: {
     reporter.equal("analytics: average wait is measured from join to service", analytics.data?.queuePerformance[0]?.averageWaitSeconds, 450);
     reporter.equal("analytics: average service is measured from service to completion", analytics.data?.queuePerformance[0]?.averageServiceSeconds, 750);
     reporter.equal("analytics: the hourly series covers the whole day", analytics.data?.completedByHour.length, 24);
+    reporter.equal(
+      "analytics: the issued-by-hour series covers the whole day",
+      analytics.data?.issuedByHour.length,
+      24,
+    );
+    reporter.check(
+      "analytics: the staff performance section is present",
+      Array.isArray(analytics.data?.staffPerformance),
+    );
+    reporter.check(
+      "analytics: service time is attributed per employee",
+      (analytics.data?.staffPerformance ?? []).some(
+        (staff) => staff.staffId === managerA.userId && staff.servedTickets === 2,
+      ),
+    );
     reporter.equal("analytics: hourly completed volume matches branch scope", analytics.data?.completedByHour.reduce((sum, row) => sum + row.count, 0), 2);
     reporter.errorCode(
       "analytics: invalid time zones are rejected",

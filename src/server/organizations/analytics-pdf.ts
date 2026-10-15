@@ -399,6 +399,27 @@ export async function renderAnalyticsPdf(
     ["left", "left", "right", "right", "right"],
   );
 
+  // ---- Staff performance -----------------------------------------------
+  await ensureSpace(doc, 60);
+  sectionTitle(doc, labels.staffPerformance);
+  await drawTable(
+    doc,
+    [
+      labels.staff,
+      labels.servedTickets,
+      labels.averageWaitSeconds,
+      labels.averageServiceSeconds,
+    ],
+    [CONTENT_WIDTH - 300, 100, 100, 100],
+    report.staffPerformance.map((entry) => [
+      entry.staffName,
+      entry.servedTickets,
+      entry.averageWaitSeconds ?? "—",
+      entry.averageServiceSeconds ?? "—",
+    ]),
+    ["left", "right", "right", "right"],
+  );
+
   // ---- Status distribution ---------------------------------------------
   await ensureSpace(doc, 60);
   sectionTitle(doc, labels.statusDistribution);
@@ -411,6 +432,18 @@ export async function renderAnalyticsPdf(
       entry.count,
     ]),
     ["left", "right"],
+  );
+
+  // ---- Arrival flow by hour --------------------------------------------
+  await ensureSpace(doc, 200);
+  sectionTitle(doc, labels.issuedHourly);
+  drawBarChart(
+    doc,
+    report.issuedByHour.map((entry) => ({
+      label: `${String(entry.hour).padStart(2, "0")}h`,
+      value: entry.count,
+    })),
+    2,
   );
 
   // ---- Hourly distribution ---------------------------------------------

@@ -9,9 +9,20 @@
 import Link from "next/link";
 import { useI18n } from "./LanguageProvider";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useSession } from "./SessionProvider";
+import { Avatar } from "./ui";
+
+/** Where each signed-in role lands from the public header. */
+function panelHref(role: string): string {
+  if (role === "ADMINISTRATOR") return "/admin";
+  if (role === "MANAGER") return "/gestor";
+  if (role === "STAFF") return "/staff";
+  return "/conta";
+}
 
 export function MarketingHeader() {
   const { t } = useI18n();
+  const { user, loading, logout } = useSession();
 
   return (
     <header className="mkt-header">
@@ -31,12 +42,33 @@ export function MarketingHeader() {
 
         <div className="mkt-actions">
           <LanguageSwitcher />
-          <Link href="/login" className="btn btn-ghost">
-            {t("landing.enterCustomer")}
-          </Link>
-          <Link href="/registar-organizacao" className="btn btn-primary">
-            {t("landing.registerCompany")}
-          </Link>
+          {loading ? null : user ? (
+            <>
+              <span className="nav-user" title={user.email}>
+                <Avatar name={user.name} />
+                {user.name}
+              </span>
+              <Link href={panelHref(user.role)} className="btn btn-primary">
+                {t("landing.goToPanel")}
+              </Link>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void logout()}
+              >
+                {t("nav.logout")}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="btn btn-ghost">
+                {t("landing.enterCustomer")}
+              </Link>
+              <Link href="/registar-organizacao" className="btn btn-primary">
+                {t("landing.registerCompany")}
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

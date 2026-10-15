@@ -12,6 +12,8 @@ import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { MarketingHeader } from "@/components/MarketingHeader";
+import { HeroCarousel } from "@/components/HeroCarousel";
+import { useSession } from "@/components/SessionProvider";
 
 interface Plan {
   id: string;
@@ -37,6 +39,10 @@ function formatKz(cents: number): string {
 
 export default function HomePage() {
   const { t } = useI18n();
+  const { user } = useSession();
+  // A signed-in manager already has an organization: choosing a plan must lead
+  // straight to payment, never back to the registration form.
+  const canCheckout = user?.role === "MANAGER";
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansError, setPlansError] = useState(false);
   const [plansLoaded, setPlansLoaded] = useState(false);
@@ -85,8 +91,15 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mkt-hero-visual" role="img" aria-label={t("landing.heroImageAlt")}>
-            <div className="mkt-hero-photo" aria-hidden="true" />
+          <div className="mkt-hero-visual">
+            <HeroCarousel
+              label={t("landing.heroImageAlt")}
+              slides={[
+                { src: "/marketing/hero-waiting-room.svg", alt: t("landing.slide1Alt") },
+                { src: "/marketing/hero-reception.svg", alt: t("landing.slide2Alt") },
+                { src: "/marketing/hero-phone.svg", alt: t("landing.slide3Alt") },
+              ]}
+            />
             <div className="mkt-float-card">
               <span className="mkt-float-dot" aria-hidden="true" />
               <div>
@@ -152,10 +165,18 @@ export default function HomePage() {
                       })}
                     </p>
                     <Link
-                      href={`/registar-organizacao?plan=${encodeURIComponent(plan.code)}`}
+                      href={
+                        canCheckout
+                          ? `/checkout?plan=${encodeURIComponent(plan.code)}`
+                          : `/registar-organizacao?plan=${encodeURIComponent(plan.code)}`
+                      }
                       className={`btn ${recommended ? "btn-primary" : "btn-ghost"} btn-block`}
                     >
-                      {isFree ? t("landing.planFree") : t("landing.planChoose")}
+                      {isFree
+                        ? t("landing.planFree")
+                        : canCheckout
+                          ? t("landing.planPayNow")
+                          : t("landing.planChoose")}
                     </Link>
                   </article>
                 );

@@ -49,7 +49,7 @@ function formatFileSize(bytes: number): string {
 
 export default function OrganizationRegistrationPage() {
   const { t, tError } = useI18n();
-  const { refresh } = useSession();
+  const { refresh, user, memberships, loading } = useSession();
   const router = useRouter();
   const [form, setForm] = useState({
     ownerName: "",
@@ -79,6 +79,19 @@ export default function OrganizationRegistrationPage() {
     const code = new URLSearchParams(window.location.search).get("plan");
     if (code) setPlanCode(code);
   }, []);
+
+  // A manager who already owns an organization must never land back on the
+  // registration form: send them straight to payment (or the panel).
+  useEffect(() => {
+    if (loading) return;
+    const isManager = memberships.some(
+      (membership) => membership.role === "MANAGER" && membership.status === "ACTIVE",
+    );
+    if (user && isManager) {
+      const code = new URLSearchParams(window.location.search).get("plan");
+      router.replace(code ? `/checkout?plan=${encodeURIComponent(code)}` : "/gestor");
+    }
+  }, [loading, user, memberships, router]);
 
   const financialSector = isFinancialSector(form.category);
   const requiredDocuments = financialSector

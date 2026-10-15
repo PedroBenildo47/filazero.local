@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Telemóvel a mostrar a senha e a posição na fila">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080c18"/>
+      <stop offset="0.5" stop-color="#141a3a"/>
+      <stop offset="1" stop-color="#0a1a2e"/>
+    </linearGradient>
+    <linearGradient id="screen3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="ring3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#bg3)"/>
+  <circle cx="980" cy="640" r="300" fill="#7c3aed" opacity="0.18"/>
+  <circle cx="180" cy="160" r="240" fill="#06b6d4" opacity="0.16"/>
+
+  <!-- background blurred blobs (waiting area) -->
+  <rect x="60" y="520" width="200" height="120" rx="24" fill="#1e293b" opacity="0.5"/>
+  <rect x="300" y="560" width="160" height="90" rx="20" fill="#1e293b" opacity="0.4"/>
+  <rect x="900" y="120" width="220" height="140" rx="24" fill="#1e293b" opacity="0.4"/>
+
+  <!-- hand -->
+  <g fill="#c98a63">
+    <path d="M300 800 q-10 -180 60 -230 q30 -20 60 6 l0 224 z"/>
+    <rect x="360" y="560" width="150" height="90" rx="30"/>
+  </g>
+
+  <!-- phone -->
+  <g>
+    <rect x="360" y="180" width="400" height="620" rx="52" fill="#0b1220" stroke="#334155" stroke-width="6"/>
+    <rect x="382" y="212" width="356" height="556" rx="36" fill="url(#screen3)"/>
+    <rect x="520" y="196" width="80" height="12" rx="6" fill="#334155"/>
+
+    <!-- app header -->
+    <text x="560" y="280" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="26" fill="#94a3b8" letter-spacing="4">A TUA VEZ</text>
+
+    <!-- progress ring -->
+    <circle cx="560" cy="430" r="104" fill="none" stroke="#1e293b" stroke-width="20"/>
+    <circle cx="560" cy="430" r="104" fill="none" stroke="url(#ring3)" stroke-width="20" stroke-linecap="round" stroke-dasharray="490 654" transform="rotate(-90 560 430)"/>
+    <text x="560" y="416" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="34" fill="#94a3b8">SENHA</text>
+    <text x="560" y="478" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="72" font-weight="800" fill="#f8fafc">B-018</text>
+
+    <!-- position card -->
+    <rect x="430" y="580" width="260" height="90" rx="22" fill="#111c34" stroke="#334155" stroke-width="2"/>
+    <text x="560" y="620" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="22" fill="#94a3b8">POSIÇÃO</text>
+    <text x="560" y="656" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="38" font-weight="700" fill="#38bdf8">3.º</text>
+  </g>
+</svg>

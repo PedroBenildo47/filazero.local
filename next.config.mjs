@@ -53,6 +53,8 @@ if (isProduction) {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Hide the Next.js development indicator (the floating "N" badge) in the UI.
+  devIndicators: false,
   // Emits `.next/standalone` with only the traced runtime dependencies, which is
   // what the production Docker image ships.
   output: "standalone",

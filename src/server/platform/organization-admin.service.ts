@@ -223,13 +223,31 @@ export async function deleteOrganizationPermanently(
   const paidTransactions = await db.transaction.count({
     where: { organizationId, status: "SUCCEEDED" },
   });
-  if (paidTransactions > 0) {
+  if (paidTransactions > 0 && !input.force) {
     throw new AppError(
       "CONFLICT",
-      "This organization has paid transactions and cannot be permanently deleted. Suspend it instead.",
+      "This organization has paid transactions and cannot be permanently deleted. Suspend it instead, or confirm a forced deletion.",
       { reason: "HAS_PAID_TRANSACTIONS", paidTransactions },
     );
   }
+
+  // A forced deletion removes the fiscal documents with the organization. Keep
+  // a snapshot of the paid invoices in the audit trail so the financial history
+  // is not silently lost.
+  const fiscalSnapshot =
+    input.force && paidTransactions > 0
+      ? await db.transaction.findMany({
+          where: { organizationId, status: "SUCCEEDED" },
+          orderBy: { paidAt: "asc" },
+          select: {
+            reference: true,
+            invoiceNumber: true,
+            amountCents: true,
+            currency: true,
+            paidAt: true,
+          },
+        })
+      : [];
 
   const [branchCount, queueCount, memberCount, ticketCount] = await db.$transaction([
     db.branch.count({ where: { organizationId } }),
@@ -265,6 +283,9 @@ export async function deleteOrganizationPermanently(
           members: memberCount,
           tickets: ticketCount,
         },
+        forced: input.force,
+        paidTransactions,
+        fiscalSnapshot,
       },
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
@@ -274,6 +295,7 @@ export async function deleteOrganizationPermanently(
   return {
     id: organizationId,
     deleted: true,
+    forced: input.force,
     removed: {
       branches: branchCount,
       queues: queueCount,

@@ -2911,3 +2911,10 @@ select.input {
     grid-template-columns: 1fr;
   }
 }
+
+.tv-counter {
+  margin: 0.25rem 0 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #facc15;
+}

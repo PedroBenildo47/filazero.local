@@ -201,6 +201,7 @@ model Organization {
 
   branches      Branch[]
   members       OrganizationMember[]
+  counters      Counter[]
   queues        Queue[]
   subscription  Subscription?
   transactions  Transaction[]
@@ -264,6 +265,7 @@ model Branch {
 
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      OrganizationMember[]
+  counters     Counter[]
   queues       Queue[]
 
   @@unique([organizationId, name])
@@ -281,6 +283,8 @@ model OrganizationMember {
   userId         String       @map("user_id") @db.Uuid
   organizationId String       @map("organization_id") @db.Uuid
   branchId       String?      @map("branch_id") @db.Uuid
+  /// Service counter (guichê) this member is assigned to, if any.
+  counterId      String?      @map("counter_id") @db.Uuid
   role           UserRole     @default(STAFF)
   status         MemberStatus @default(ACTIVE)
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -289,10 +293,12 @@ model OrganizationMember {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  counter      Counter?     @relation(fields: [counterId], references: [id], onDelete: SetNull)
 
   @@unique([userId, organizationId, branchId])
   @@index([organizationId, role, status])
   @@index([branchId])
+  @@index([counterId])
   @@map("organization_members")
 }
 
@@ -306,6 +312,8 @@ model Queue {
   branchId        String      @map("branch_id") @db.Uuid
   /// Short, human-typable public code (QR / manual entry). Unique per queue.
   publicCode      String      @unique @map("public_code") @db.VarChar(12)
+  /// Ticket prefix shown on screens (e.g. "A" geral, "P" prioritário).
+  prefix          String?     @db.VarChar(3)
   name            String      @db.VarChar(160)
   description     String?     @db.Text
   status          QueueStatus @default(CLOSED)
@@ -814,6 +822,25 @@ model CustomerPaymentProof {
 
   @@index([paymentId, createdAt])
   @@map("customer_payment_proofs")
+}
+
+/// A service counter (guichê) where a staff member serves customers.
+model Counter {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  branchId       String   @map("branch_id") @db.Uuid
+  name           String   @db.VarChar(80)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  members      OrganizationMember[]
+
+  @@unique([branchId, name])
+  @@index([organizationId, active])
+  @@map("counters")
 }
 
 /// Atomic per-period counters (e.g. yearly invoice sequence).

@@ -18,12 +18,14 @@ interface Board {
     name: string;
     status: string;
     publicCode: string;
+    prefix: string | null;
     organizationId: string;
     organizationName: string;
     organizationLogoUrl: string | null;
     branchName: string;
   };
   currentTicketNumber: number | null;
+  currentCounterName: string | null;
   waiting: { ticketNumber: number; position: number }[];
   recent: { ticketNumber: number; status: string; at: string }[];
   waitingCount: number;
@@ -84,8 +86,13 @@ export default function DisplayBoardPage() {
         <div className="tv-current">
           <p className="tv-label">A ATENDER</p>
           <strong className="tv-current-number">
-            {board?.currentTicketNumber ?? "—"}
+            {board?.currentTicketNumber === null || board?.currentTicketNumber === undefined
+              ? "—"
+              : `${board.queue.prefix ?? ""}${board.currentTicketNumber}`}
           </strong>
+          {board?.currentCounterName ? (
+            <p className="tv-counter">{board.currentCounterName}</p>
+          ) : null}
           {board && board.queue.status !== "OPEN" ? (
             <p className="tv-closed">FILA FECHADA</p>
           ) : null}

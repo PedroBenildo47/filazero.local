@@ -39,7 +39,12 @@ export const RATE_LIMITS: Record<
   },
   // Account creation: stops scripted mass registration without blocking an office.
   register: {
-    ip: { windowSeconds: 3_600, max: 50 },
+    // Configurable so the HTTP test suite (which registers many users) can run
+    // without tripping the production policy.
+    ip: {
+      windowSeconds: 3_600,
+      max: Number(process.env.RATE_LIMIT_REGISTER_MAX ?? 50) || 50,
+    },
   },
   organizationRegister: {
     ip: { windowSeconds: 3_600, max: 5 },

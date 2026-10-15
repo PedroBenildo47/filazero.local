@@ -31,6 +31,7 @@ export function publicMember(member: OrganizationMember) {
     userId: member.userId,
     organizationId: member.organizationId,
     branchId: member.branchId,
+    counterId: member.counterId,
     role: member.role,
     status: member.status,
     createdAt: member.createdAt,

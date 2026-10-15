@@ -24,6 +24,12 @@ export const adminOrganizationStatusSchema = z.object({
 /** Permanent deletion requires the operator to type the organization name. */
 export const deleteOrganizationSchema = z.object({
   confirmName: z.string().trim().min(1).max(200),
+  /**
+   * Owner-only override for test or erroneous accounts: allows deleting an
+   * organization that already has paid transactions. The fiscal trail is
+   * snapshotted into the audit log before the rows are removed.
+   */
+  force: z.boolean().optional().default(false),
 });
 
 /** Financial window for the consolidated revenue dashboard. */

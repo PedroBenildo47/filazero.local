@@ -55,6 +55,7 @@ export function Nav() {
             <>
               {link("/", t("nav.home"))}
               {link("/pesquisar", t("nav.search"))}
+              {link("/atms", t("nav.atms"))}
               {user && link("/conta", t("nav.account"))}
               {isStaff && link("/staff", t("nav.staff"))}
               {isManager && link("/gestor", t("nav.manage"))}

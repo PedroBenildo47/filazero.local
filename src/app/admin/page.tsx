@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Card, EmptyState, Spinner, StatCard } from "@/components/ui";
 import {
@@ -96,7 +97,119 @@ interface AuditListResponse {
   pageSize: number;
 }
 
-type Tab = "finance" | "organizations" | "audit";
+interface GrowthBucket {
+  label: string;
+  count: number;
+}
+
+interface PlatformOverview {
+  generatedAt: string;
+  organizations: { total: number; active: number; suspended: number; inactive: number };
+  users: { total: number; active: number; managers: number; staff: number; customers: number };
+  activity: {
+    activeQueues: number;
+    pausedQueues: number;
+    waitingTickets: number;
+    ticketsToday: number;
+    completedToday: number;
+    noShowToday: number;
+  };
+  growth: {
+    organizationsByWeek: GrowthBucket[];
+    organizationsByMonth: GrowthBucket[];
+    usersByWeek: GrowthBucket[];
+  };
+}
+
+interface PlatformAlert {
+  id: string;
+  code: string;
+  severity: "high" | "medium" | "low";
+  messageKey: string;
+  values: Record<string, string | number>;
+  entityType?: string;
+  entityId?: string;
+  at: string;
+}
+
+interface SystemHealth {
+  status: "ok" | "degraded";
+  generatedAt: string;
+  database: { reachable: boolean; latencyMs: number | null };
+  process: {
+    uptimeSeconds: number;
+    rssBytes: number;
+    heapUsedBytes: number;
+    heapTotalBytes: number;
+    nodeVersion: string;
+  };
+  system: {
+    platform: string;
+    cpuCount: number;
+    loadAverage1m: number;
+    freeMemoryBytes: number;
+    totalMemoryBytes: number;
+  };
+  counters: {
+    pendingTransactions: number;
+    failedTransactions24h: number;
+    pendingNotifications: number;
+    failedNotifications24h: number;
+    activeQueues: number;
+    waitingTickets: number;
+  };
+  recentAudit: {
+    id: string;
+    action: string;
+    entityType: string | null;
+    description: string | null;
+    createdAt: string;
+    actor: { name: string; email: string } | null;
+  }[];
+}
+
+type Tab = "overview" | "finance" | "organizations" | "audit" | "health";
+
+const SEVERITY_TONE: Record<PlatformAlert["severity"], "danger" | "warn" | "info"> = {
+  high: "danger",
+  medium: "warn",
+  low: "info",
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MiB`;
+  return `${(bytes / 1024).toFixed(0)} KiB`;
+}
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  return days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function MiniBars({ title, buckets }: { title: string; buckets: GrowthBucket[] }) {
+  const max = Math.max(1, ...buckets.map((bucket) => bucket.count));
+  return (
+    <Card title={title}>
+      <div className="bar-chart">
+        {buckets.map((bucket) => (
+          <div key={bucket.label} className="bar-col" title={`${bucket.label}: ${bucket.count}`}>
+            <span className="bar-value">{bucket.count}</span>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{ height: `${Math.max(4, Math.round((bucket.count / max) * 100))}%` }}
+              />
+            </div>
+            <span className="bar-label">{bucket.label.slice(5)}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Dashboard                                                                  */
@@ -105,11 +218,14 @@ type Tab = "finance" | "organizations" | "audit";
 function AdminDashboard() {
   const { t, tError, formatDateTime } = useI18n();
 
-  const [tab, setTab] = useState<Tab>("finance");
+  const [tab, setTab] = useState<Tab>("overview");
   const [finance, setFinance] = useState<PlatformFinance | null>(null);
   const [organizations, setOrganizations] = useState<OrganizationListResponse | null>(null);
   const [plans, setPlans] = useState<PlanOption[]>([]);
   const [audit, setAudit] = useState<AuditListResponse | null>(null);
+  const [overview, setOverview] = useState<PlatformOverview | null>(null);
+  const [alerts, setAlerts] = useState<PlatformAlert[]>([]);
+  const [health, setHealth] = useState<SystemHealth | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -152,19 +268,37 @@ function AdminDashboard() {
     [],
   );
 
+  const loadMonitoring = useCallback(async () => {
+    const [overviewData, alertData, healthData] = await Promise.all([
+      api<PlatformOverview>("/api/admin/overview"),
+      api<PlatformAlert[]>("/api/admin/alerts"),
+      api<SystemHealth>("/api/admin/health"),
+    ]);
+    setOverview(overviewData);
+    setAlerts(alertData);
+    setHealth(healthData);
+  }, []);
+
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [financeData, orgData, planData] = await Promise.all([
-          api<PlatformFinance>("/api/admin/finance?months=12"),
-          api<OrganizationListResponse>("/api/admin/organizations?pageSize=100"),
-          api<{ items: PlanOption[] }>("/api/plans"),
-        ]);
+        const [financeData, orgData, planData, overviewData, alertData, healthData] =
+          await Promise.all([
+            api<PlatformFinance>("/api/admin/finance?months=12"),
+            api<OrganizationListResponse>("/api/admin/organizations?pageSize=100"),
+            api<{ items: PlanOption[] }>("/api/plans"),
+            api<PlatformOverview>("/api/admin/overview"),
+            api<PlatformAlert[]>("/api/admin/alerts"),
+            api<SystemHealth>("/api/admin/health"),
+          ]);
         if (!active) return;
         setFinance(financeData);
         setOrganizations(orgData);
         setPlans(planData.items);
+        setOverview(overviewData);
+        setAlerts(alertData);
+        setHealth(healthData);
       } catch (caught) {
         if (active) setError(tError(caught));
       } finally {
@@ -261,6 +395,7 @@ function AdminDashboard() {
                 loadFinance(),
                 loadOrganizations(orgQuery),
                 loadAudit(auditQuery),
+                loadMonitoring(),
               ]);
             })
           }
@@ -273,7 +408,7 @@ function AdminDashboard() {
       {notice && <Alert kind="success">{notice}</Alert>}
 
       <div className="tabs" role="tablist">
-        {(["finance", "organizations", "audit"] as const).map((value) => (
+        {(["overview", "finance", "organizations", "audit", "health"] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -286,6 +421,94 @@ function AdminDashboard() {
           </button>
         ))}
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Overview                                                          */}
+      {/* ---------------------------------------------------------------- */}
+      {tab === "overview" && (
+        <section className="stack">
+          <p className="muted">{t("admin.overview.subtitle")}</p>
+          {!overview ? (
+            <Spinner label={t("common.loading")} />
+          ) : (
+            <>
+              <div className="kpi-grid">
+                <StatCard
+                  label={t("admin.kpi.organizationsActive")}
+                  value={overview.organizations.active}
+                  hint={`${t("admin.orgStatus.SUSPENDED")}: ${overview.organizations.suspended} · ${t("admin.orgStatus.INACTIVE")}: ${overview.organizations.inactive}`}
+                  tone="ok"
+                />
+                <StatCard
+                  label={t("admin.kpi.usersTotal")}
+                  value={overview.users.total}
+                  hint={t("admin.kpi.usersBreakdown", {
+                    managers: overview.users.managers,
+                    staff: overview.users.staff,
+                  })}
+                  tone="info"
+                />
+                <StatCard
+                  label={t("admin.kpi.activeQueues")}
+                  value={overview.activity.activeQueues}
+                  hint={`${t("admin.kpi.waitingNow")}: ${overview.activity.waitingTickets}`}
+                  tone="ok"
+                />
+                <StatCard
+                  label={t("admin.kpi.ticketsToday")}
+                  value={overview.activity.ticketsToday}
+                  hint={`${t("admin.kpi.completedToday")}: ${overview.activity.completedToday}`}
+                  tone="info"
+                />
+                <StatCard
+                  label={t("admin.kpi.waitingNow")}
+                  value={overview.activity.waitingTickets}
+                  tone="warn"
+                />
+              </div>
+
+              <Card
+                title={`${t("admin.alerts.title")}${
+                  alerts.length > 0
+                    ? ` · ${t("admin.alerts.count", { count: alerts.length })}`
+                    : ""
+                }`}
+              >
+                {alerts.length === 0 ? (
+                  <EmptyState>{t("admin.alerts.empty")}</EmptyState>
+                ) : (
+                  <ul className="alert-list">
+                    {alerts.map((alert) => (
+                      <li key={alert.id} className="alert-row">
+                        <Badge tone={SEVERITY_TONE[alert.severity]}>
+                          {t(`admin.severity.${alert.severity}` as MessageKey)}
+                        </Badge>
+                        <span>{t(alert.messageKey as MessageKey, alert.values)}</span>
+                        <span className="muted subtle">{formatDateTime(alert.at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+
+              <div className="row" style={{ alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+                <MiniBars
+                  title={t("admin.growth.orgsByWeek")}
+                  buckets={overview.growth.organizationsByWeek}
+                />
+                <MiniBars
+                  title={t("admin.growth.usersByWeek")}
+                  buckets={overview.growth.usersByWeek}
+                />
+                <MiniBars
+                  title={t("admin.growth.orgsByMonth")}
+                  buckets={overview.growth.organizationsByMonth}
+                />
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       {/* Finance                                                           */}
@@ -641,6 +864,111 @@ function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* System health                                                     */}
+      {/* ---------------------------------------------------------------- */}
+      {tab === "health" && (
+        <section className="stack">
+          <p className="muted">{t("admin.health.subtitle")}</p>
+          {!health ? (
+            <Spinner label={t("common.loading")} />
+          ) : (
+            <>
+              <div className="kpi-grid">
+                <StatCard
+                  label={t("admin.health.status")}
+                  value={
+                    health.status === "ok"
+                      ? t("admin.health.ok")
+                      : t("admin.health.degraded")
+                  }
+                  tone={health.status === "ok" ? "ok" : "danger"}
+                />
+                <StatCard
+                  label={t("admin.health.database")}
+                  value={
+                    health.database.reachable
+                      ? t("admin.health.reachable")
+                      : t("admin.health.unreachable")
+                  }
+                  hint={`${t("admin.health.latency")}: ${health.database.latencyMs ?? "—"} ms`}
+                  tone={health.database.reachable ? "ok" : "danger"}
+                />
+                <StatCard
+                  label={t("admin.health.uptime")}
+                  value={formatUptime(health.process.uptimeSeconds)}
+                  hint={`Node ${health.process.nodeVersion}`}
+                  tone="info"
+                />
+                <StatCard
+                  label={t("admin.health.memory")}
+                  value={formatBytes(health.process.rssBytes)}
+                  hint={`Heap: ${formatBytes(health.process.heapUsedBytes)}`}
+                  tone="info"
+                />
+                <StatCard
+                  label={t("admin.health.load")}
+                  value={health.system.loadAverage1m.toFixed(2)}
+                  hint={`${health.system.cpuCount} ${t("admin.health.cpus")} · ${health.system.platform}`}
+                  tone="info"
+                />
+              </div>
+
+              <Card title={t("admin.health.subtitle")}>
+                <table className="table">
+                  <tbody>
+                    <tr>
+                      <td>{t("admin.health.pendingTx")}</td>
+                      <td>{health.counters.pendingTransactions}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("admin.health.failedTx")}</td>
+                      <td>{health.counters.failedTransactions24h}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("admin.health.pendingNotif")}</td>
+                      <td>{health.counters.pendingNotifications}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("admin.health.failedNotif")}</td>
+                      <td>{health.counters.failedNotifications24h}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("admin.kpi.activeQueues")}</td>
+                      <td>{health.counters.activeQueues}</td>
+                    </tr>
+                    <tr>
+                      <td>{t("admin.kpi.waitingNow")}</td>
+                      <td>{health.counters.waitingTickets}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Card>
+
+              <Card title={t("admin.health.recentAudit")}>
+                {health.recentAudit.length === 0 ? (
+                  <EmptyState>{t("admin.noData")}</EmptyState>
+                ) : (
+                  <ul className="alert-list">
+                    {health.recentAudit.map((entry) => (
+                      <li key={entry.id} className="alert-row">
+                        <span className="mono">{entry.action}</span>
+                        <span className="muted">
+                          {entry.actor ? entry.actor.name : t("admin.audit.system")}
+                        </span>
+                        <span className="muted subtle">
+                          {formatDateTime(entry.createdAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
             </>
           )}
         </section>

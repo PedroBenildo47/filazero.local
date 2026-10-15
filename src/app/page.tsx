@@ -28,8 +28,21 @@ interface Plan {
   maxStaff: number;
 }
 
-/** Recommended plan highlighted on the showcase (the 2.000 Kz/month plan). */
-const RECOMMENDED_CODE = "starter";
+/** Recommended plan highlighted on the showcase (Profissional). */
+const RECOMMENDED_CODE = "growth";
+
+/** Highlights the word "fila" in the hero title with the accent colour. */
+function highlightFila(text: string) {
+  return text.split(/(fila)/i).map((part, index) =>
+    /^fila$/i.test(part) ? (
+      <span key={index} className="mkt-accent">
+        {part}
+      </span>
+    ) : (
+      <span key={index}>{part}</span>
+    ),
+  );
+}
 
 /** Formats a price given in cents as Angolan Kwanzas, e.g. `100.000 Kz`. */
 function formatKz(cents: number): string {
@@ -79,13 +92,13 @@ export default function HomePage() {
         <section className="mkt-hero">
           <div className="mkt-hero-copy">
             <span className="mkt-eyebrow">{t("landing.eyebrow")}</span>
-            <h1 className="mkt-hero-title">{t("landing.heroTitle")}</h1>
+            <h1 className="mkt-hero-title">{highlightFila(t("landing.heroTitle"))}</h1>
             <p className="mkt-hero-subtitle">{t("landing.heroSubtitle")}</p>
             <div className="mkt-hero-actions">
-              <Link href="/login" className="btn btn-primary btn-lg">
-                {t("landing.heroPrimary")}
+              <Link href="/login" className="btn btn-accent btn-lg">
+                {t("landing.heroPrimary")} <span aria-hidden="true">→</span>
               </Link>
-              <Link href="/registar-organizacao" className="btn btn-ghost btn-lg">
+              <Link href="/registar-organizacao" className="btn btn-outline-light btn-lg">
                 {t("landing.heroSecondary")}
               </Link>
             </div>
@@ -170,7 +183,7 @@ export default function HomePage() {
                           ? `/checkout?plan=${encodeURIComponent(plan.code)}`
                           : `/registar-organizacao?plan=${encodeURIComponent(plan.code)}`
                       }
-                      className={`btn ${recommended ? "btn-primary" : "btn-ghost"} btn-block`}
+                      className={`btn ${recommended ? "btn-accent" : "btn-outline-light"} btn-block`}
                     >
                       {isFree
                         ? t("landing.planFree")
@@ -190,8 +203,8 @@ export default function HomePage() {
           <div className="mkt-business-copy">
             <h2>{t("landing.businessTitle")}</h2>
             <p>{t("landing.businessText")}</p>
-            <Link href="/registar-organizacao" className="btn btn-primary btn-lg">
-              {t("landing.businessCta")}
+            <Link href="/registar-organizacao" className="btn btn-accent btn-lg">
+              {t("landing.businessCta")} <span aria-hidden="true">→</span>
             </Link>
           </div>
         </section>

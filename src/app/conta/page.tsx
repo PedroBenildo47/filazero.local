@@ -5,6 +5,7 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { useQueueStream } from "@/components/useQueueStream";
 import { RequireAuth } from "@/components/RequireAuth";
+import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import {
   Alert,
   Badge,
@@ -171,6 +172,8 @@ function AccountDashboard() {
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}
+
+      <SubscriptionBanner />
 
       {!active ? (
         <Card hover>

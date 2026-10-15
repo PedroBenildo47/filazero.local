@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { QRCodeCanvas } from "qrcode.react";
 import { api } from "@/lib/api-client";
 import { OrganizationLogo } from "@/components/OrganizationLogo";
 
@@ -18,6 +19,7 @@ interface Board {
     id: string;
     name: string;
     status: string;
+    publicCode: string;
     organizationId: string;
     organizationName: string;
     organizationLogoUrl: string | null;
@@ -128,6 +130,28 @@ export default function TotemPage() {
           <p style={{ margin: 0, fontSize: "1.5rem" }}>
             {position ? `${position}º na fila` : "Aguarde ser chamado"}
           </p>
+          {board?.queue.publicCode ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginTop: "0.5rem",
+              }}
+            >
+              <div style={{ background: "#ffffff", padding: "0.5rem", borderRadius: "12px" }}>
+                <QRCodeCanvas
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/fila/${board.queue.publicCode}`}
+                  size={148}
+                  level="M"
+                />
+              </div>
+              <p style={{ margin: 0, opacity: 0.75, fontSize: "0.95rem" }}>
+                Acompanhe no telemóvel: leia o QR
+              </p>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => setTicket(null)}

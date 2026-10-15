@@ -41,6 +41,14 @@ interface StatusRow {
   count: number;
 }
 
+interface StaffPerformanceRow {
+  staffId: string;
+  staffName: string;
+  servedTickets: number;
+  averageWaitSeconds: number | null;
+  averageServiceSeconds: number | null;
+}
+
 interface AveragesRow {
   averageWaitSeconds: number | null;
   averageServiceSeconds: number | null;
@@ -133,9 +141,11 @@ export async function getOrganizationAnalytics(
     weeklyRows,
     queueRows,
     hourlyRows,
+    issuedHourRows,
     statusRows,
     averageRows,
     branchRows,
+    staffRows,
   ] = await Promise.all([
     db.$queryRaw<BucketRow[]>(Prisma.sql`
       SELECT to_char(date_trunc('day', t.joined_at AT TIME ZONE ${query.timezone}), 'YYYY-MM-DD') AS bucket,
@@ -195,6 +205,19 @@ export async function getOrganizationAnalytics(
       GROUP BY 1
       ORDER BY 1
     `),
+    // Arrival flow: tickets issued per local hour.
+    db.$queryRaw<BucketRow[]>(Prisma.sql`
+      SELECT EXTRACT(HOUR FROM (t.joined_at AT TIME ZONE ${query.timezone}))::int::text AS bucket,
+             COUNT(*)::int AS count
+      FROM tickets t
+      INNER JOIN queues q ON q.id = t.queue_id
+      WHERE q.organization_id = ${organizationId}::uuid
+        ${branchScope}
+        AND t.joined_at >= ${from}
+        AND t.joined_at < ${to}
+      GROUP BY 1
+      ORDER BY 1
+    `),
     // Cohort: tickets issued in the period, grouped by their current status.
     db.$queryRaw<StatusRow[]>(Prisma.sql`
       SELECT t.status::text AS status,
@@ -237,12 +260,37 @@ export async function getOrganizationAnalytics(
       GROUP BY b.id, b.name
       ORDER BY b.name
     `),
+    // Per-employee service times over tickets completed in the period.
+    db.$queryRaw<StaffPerformanceRow[]>(Prisma.sql`
+      SELECT u.id AS "staffId",
+             u.name AS "staffName",
+             COUNT(t.id)::int AS "servedTickets",
+             ROUND(AVG(EXTRACT(EPOCH FROM (t.serving_at - t.joined_at)))::numeric)::int AS "averageWaitSeconds",
+             ROUND(AVG(EXTRACT(EPOCH FROM (t.completed_at - t.serving_at)))::numeric)::int AS "averageServiceSeconds"
+      FROM tickets t
+      INNER JOIN queues q ON q.id = t.queue_id
+      INNER JOIN users u ON u.id = t.served_by_id
+      WHERE q.organization_id = ${organizationId}::uuid
+        ${branchScope}
+        AND t.status = 'COMPLETED'
+        AND t.completed_at >= ${from}
+        AND t.completed_at < ${to}
+      GROUP BY u.id, u.name
+      ORDER BY "servedTickets" DESC, u.name
+    `),
   ]);
 
   const hourlyCounts = new Map(hourlyRows.map((row) => [Number(row.bucket), Number(row.count)]));
   const completedByHour = Array.from({ length: 24 }, (_, hour) => ({
     hour,
     count: hourlyCounts.get(hour) ?? 0,
+  }));
+  const issuedHourCounts = new Map(
+    issuedHourRows.map((row) => [Number(row.bucket), Number(row.count)]),
+  );
+  const issuedByHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: issuedHourCounts.get(hour) ?? 0,
   }));
   const issuedByDay = dailyRows.map((row) => ({ date: row.bucket, count: Number(row.count) }));
   const issuedByWeek = weeklyRows.map((row) => ({
@@ -292,7 +340,17 @@ export async function getOrganizationAnalytics(
       averageServiceSeconds:
         row.averageServiceSeconds === null ? null : Number(row.averageServiceSeconds),
     })),
+    staffPerformance: staffRows.map((row) => ({
+      staffId: row.staffId,
+      staffName: row.staffName,
+      servedTickets: Number(row.servedTickets),
+      averageWaitSeconds:
+        row.averageWaitSeconds === null ? null : Number(row.averageWaitSeconds),
+      averageServiceSeconds:
+        row.averageServiceSeconds === null ? null : Number(row.averageServiceSeconds),
+    })),
     statusDistribution,
+    issuedByHour,
     completedByHour,
     peak: {
       busiestDay: peakDay(issuedByDay),

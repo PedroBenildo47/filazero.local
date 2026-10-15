@@ -14,6 +14,7 @@ export interface PublicBoard {
     id: string;
     name: string;
     status: string;
+    publicCode: string;
     organizationId: string;
     organizationName: string;
     organizationLogoUrl: string | null;
@@ -21,6 +22,8 @@ export interface PublicBoard {
   };
   currentTicketNumber: number | null;
   waiting: { ticketNumber: number; position: number }[];
+  /** Last called/serving/completed tickets, newest first (TV history). */
+  recent: { ticketNumber: number; status: string; at: string }[];
   waitingCount: number;
   kioskEnabled: boolean;
   updatedAt: string;
@@ -33,6 +36,7 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
       id: true,
       name: true,
       status: true,
+      publicCode: true,
       kioskEnabled: true,
       branch: {
         select: {
@@ -45,7 +49,7 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
   });
   if (!queue) throw AppError.notFound("Queue not found");
 
-  const [waiting, waitingCount] = await db.$transaction([
+  const [waiting, waitingCount, recent] = await db.$transaction([
     db.ticket.findMany({
       where: { queueId, status: "WAITING" },
       orderBy: [{ joinedAt: "asc" }, { ticketNumber: "asc" }],
@@ -53,6 +57,12 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
       select: { ticketNumber: true },
     }),
     db.ticket.count({ where: { queueId, status: "WAITING" } }),
+    db.ticket.findMany({
+      where: { queueId, status: { in: ["CALLED", "SERVING", "COMPLETED"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: { ticketNumber: true, status: true, updatedAt: true },
+    }),
   ]);
 
   return {
@@ -60,6 +70,7 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
       id: queue.id,
       name: queue.name,
       status: queue.status,
+      publicCode: queue.publicCode,
       organizationId: queue.branch.organization.id,
       organizationName: queue.branch.organization.name,
       organizationLogoUrl: queue.branch.organization.logoUrl,
@@ -69,6 +80,11 @@ export async function getPublicBoard(queueId: string, limit = 8): Promise<Public
     waiting: waiting.map((ticket, index) => ({
       ticketNumber: ticket.ticketNumber,
       position: index + 1,
+    })),
+    recent: recent.map((ticket) => ({
+      ticketNumber: ticket.ticketNumber,
+      status: ticket.status,
+      at: ticket.updatedAt.toISOString(),
     })),
     waitingCount,
     kioskEnabled: queue.kioskEnabled,

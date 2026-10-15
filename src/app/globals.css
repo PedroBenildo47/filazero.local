@@ -2770,3 +2770,144 @@ select.input {
   color: var(--accent-2);
   font-weight: 600;
 }
+
+/* ==========================================================================
+   TV display (waiting-room board) — high contrast
+   ========================================================================== */
+
+.tv {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.5rem 3rem;
+  background: #050810;
+  color: #ffffff;
+}
+
+.tv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 1.25rem;
+}
+
+.tv-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tv-org {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.tv-queue {
+  margin: 0.15rem 0 0;
+  font-size: 2rem;
+}
+
+.tv-clock {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+
+.tv-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.tv-current {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.tv-label {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.tv-current-number {
+  font-size: clamp(6rem, 14vw, 12rem);
+  line-height: 0.95;
+  font-weight: 800;
+  color: #22c55e;
+}
+
+.tv-closed {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f87171;
+}
+
+.tv-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.tv-list li {
+  font-size: 2.4rem;
+  font-weight: 700;
+  padding: 0.6rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tv-list-small li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 1.7rem;
+}
+
+.tv-recent-number {
+  font-weight: 700;
+}
+
+.tv-recent-time {
+  font-size: 0.95rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-empty,
+.tv-waiting {
+  margin: 0;
+  color: #94a3b8;
+}
+
+@media (max-width: 900px) {
+  .tv {
+    padding: 1.5rem;
+  }
+  .tv-grid {
+    grid-template-columns: 1fr;
+  }
+}

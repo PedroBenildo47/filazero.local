@@ -115,6 +115,46 @@ interface Invoice {
   periodEnd: string | null;
 }
 
+interface Operations {
+  generatedAt: string;
+  totals: {
+    activeQueues: number;
+    totalQueues: number;
+    waitingTickets: number;
+    servingNow: number;
+    ticketsToday: number;
+    completedToday: number;
+    noShowToday: number;
+    averageWaitSeconds: number | null;
+  };
+  queues: Array<{
+    id: string;
+    name: string;
+    prefix: string | null;
+    status: string;
+    branchName: string;
+    waitingCount: number;
+    currentTicketNumber: number | null;
+    currentTicketStatus: string | null;
+  }>;
+}
+
+interface CounterItem {
+  id: string;
+  branchId: string;
+  name: string;
+  active: boolean;
+  branch: { id: string; name: string };
+  members: number;
+}
+
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "—";
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes > 0 ? `${minutes}m ${rest}s` : `${rest}s`;
+}
 
 function ManagerDashboard() {
   const { t, tError } = useI18n();
@@ -134,6 +174,9 @@ function ManagerDashboard() {
   const [billing, setBilling] = useState<BillingOverview | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [operations, setOperations] = useState<Operations | null>(null);
+  const [counters, setCounters] = useState<CounterItem[]>([]);
+  const [counterForm, setCounterForm] = useState({ branchId: "", name: "" });
   const [proofBusyId, setProofBusyId] = useState<string | null>(null);
   const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
     null,
@@ -148,13 +191,14 @@ function ManagerDashboard() {
     taxId: "",
   });
   const [branchForm, setBranchForm] = useState({ name: "", address: "", city: "" });
-  const [queueForm, setQueueForm] = useState({ name: "", description: "" });
+  const [queueForm, setQueueForm] = useState({ name: "", description: "", prefix: "" });
   const [memberForm, setMemberForm] = useState({
     name: "",
     email: "",
     password: "",
     role: "STAFF",
     branchId: "",
+    counterId: "",
   });
 
   useEffect(() => {
@@ -180,21 +224,32 @@ function ManagerDashboard() {
     async (id: string) => {
       if (!id) return;
       try {
-        const [branchList, memberList, billingData, transactionList, invoiceList] =
-          await Promise.all([
-            api<{ items: Branch[] }>(`/api/organizations/${id}/branches?pageSize=50`),
-            api<{ items: Member[] }>(`/api/organizations/${id}/members?pageSize=50`),
-            api<BillingOverview>(`/api/organizations/${id}/subscription`),
-            api<{ items: Transaction[] }>(
-              `/api/organizations/${id}/transactions?pageSize=20`,
-            ),
-            api<{ items: Invoice[] }>(`/api/organizations/${id}/invoices?pageSize=20`),
-          ]);
+        const [
+          branchList,
+          memberList,
+          billingData,
+          transactionList,
+          invoiceList,
+          operationsData,
+          counterList,
+        ] = await Promise.all([
+          api<{ items: Branch[] }>(`/api/organizations/${id}/branches?pageSize=50`),
+          api<{ items: Member[] }>(`/api/organizations/${id}/members?pageSize=50`),
+          api<BillingOverview>(`/api/organizations/${id}/subscription`),
+          api<{ items: Transaction[] }>(
+            `/api/organizations/${id}/transactions?pageSize=20`,
+          ),
+          api<{ items: Invoice[] }>(`/api/organizations/${id}/invoices?pageSize=20`),
+          api<Operations>(`/api/organizations/${id}/operations`),
+          api<{ items: CounterItem[] }>(`/api/organizations/${id}/counters`),
+        ]);
         setBranches(branchList.items);
         setMembers(memberList.items);
         setBilling(billingData);
         setTransactions(transactionList.items);
         setInvoices(invoiceList.items);
+        setOperations(operationsData);
+        setCounters(counterList.items);
         setBranchId((current) =>
           branchList.items.some((branch) => branch.id === current)
             ? current
@@ -481,6 +536,79 @@ function ManagerDashboard() {
                 {t("manager.saveOrganization")}
               </button>
             </div>
+          </Card>
+
+          <Card title={t("manager.operations")}>
+            {!operations ? (
+              <Spinner label={t("common.loading")} />
+            ) : (
+              <>
+                <div className="kpi-grid">
+                  <StatCard
+                    label={t("manager.op.serving")}
+                    value={operations.totals.servingNow}
+                    tone="info"
+                  />
+                  <StatCard
+                    label={t("manager.op.waiting")}
+                    value={operations.totals.waitingTickets}
+                    tone="warn"
+                  />
+                  <StatCard
+                    label={t("manager.op.avgWait")}
+                    value={formatDuration(operations.totals.averageWaitSeconds)}
+                    tone="info"
+                  />
+                  <StatCard
+                    label={t("manager.op.today")}
+                    value={operations.totals.ticketsToday}
+                    hint={`${t("manager.op.completed")}: ${operations.totals.completedToday} · ${t("manager.op.noShow")}: ${operations.totals.noShowToday}`}
+                    tone="ok"
+                  />
+                  <StatCard
+                    label={t("manager.op.activeQueues")}
+                    value={operations.totals.activeQueues}
+                    hint={`${t("manager.op.totalQueues")}: ${operations.totals.totalQueues}`}
+                    tone="ok"
+                  />
+                </div>
+                <div className="table-scroll">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>{t("manager.branch")}</th>
+                        <th>{t("manager.name")}</th>
+                        <th>{t("staff.countWaiting")}</th>
+                        <th>{t("manager.op.nowServing")}</th>
+                        <th>{t("common.status")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {operations.queues.map((queue) => (
+                        <tr key={queue.id}>
+                          <td className="muted">{queue.branchName}</td>
+                          <td>
+                            {queue.prefix ? `${queue.prefix} · ` : ""}
+                            {queue.name}
+                          </td>
+                          <td>{queue.waitingCount}</td>
+                          <td>
+                            {queue.currentTicketNumber === null
+                              ? "—"
+                              : `${queue.prefix ?? ""}${queue.currentTicketNumber}`}
+                          </td>
+                          <td>
+                            <Badge tone={statusTone(queue.status)}>
+                              {t(queueStatusKey(queue.status))}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </Card>
 
           <Card title={t("manager.logo")}>
@@ -800,6 +928,127 @@ function ManagerDashboard() {
             </div>
           </Card>
 
+          <Card title={t("manager.counters")}>
+            {counters.length === 0 ? (
+              <EmptyState>{t("manager.noCounters")}</EmptyState>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t("manager.counterName")}</th>
+                    <th>{t("manager.branch")}</th>
+                    <th>{t("manager.counterMembers")}</th>
+                    <th>{t("common.status")}</th>
+                    <th>{t("common.actions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {counters.map((counter) => (
+                    <tr key={counter.id}>
+                      <td>{counter.name}</td>
+                      <td className="muted">{counter.branch.name}</td>
+                      <td>{counter.members}</td>
+                      <td>
+                        <Badge tone={counter.active ? "ok" : "muted"}>
+                          {counter.active
+                            ? t("manager.counterActive")
+                            : t("manager.counterInactive")}
+                        </Badge>
+                      </td>
+                      <td>
+                        <div className="row">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await api(
+                                  `/api/organizations/${organizationId}/counters/${counter.id}`,
+                                  { method: "PATCH", json: { active: !counter.active } },
+                                );
+                                await loadOrganization(organizationId);
+                              })
+                            }
+                          >
+                            {counter.active
+                              ? t("manager.counterDeactivate")
+                              : t("manager.counterActivate")}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            disabled={busy}
+                            onClick={() => {
+                              if (!window.confirm(t("manager.confirmRemove"))) return;
+                              void run(async () => {
+                                await api(
+                                  `/api/organizations/${organizationId}/counters/${counter.id}`,
+                                  { method: "DELETE" },
+                                );
+                                await loadOrganization(organizationId);
+                              });
+                            }}
+                          >
+                            {t("manager.remove")}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="row form-inline">
+              <label className="field">
+                <span>{t("manager.branch")}</span>
+                <select
+                  className="input"
+                  value={counterForm.branchId}
+                  onChange={(event) =>
+                    setCounterForm({ ...counterForm, branchId: event.target.value })
+                  }
+                >
+                  <option value="">{t("manager.selectBranchFirst")}</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>{t("manager.counterName")}</span>
+                <input
+                  className="input"
+                  maxLength={80}
+                  placeholder="Guichê 01"
+                  value={counterForm.name}
+                  onChange={(event) =>
+                    setCounterForm({ ...counterForm, name: event.target.value })
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy || !counterForm.branchId || counterForm.name.trim().length < 1}
+                onClick={() =>
+                  void run(async () => {
+                    await api(`/api/organizations/${organizationId}/counters`, {
+                      method: "POST",
+                      json: { branchId: counterForm.branchId, name: counterForm.name },
+                    });
+                    setCounterForm({ branchId: "", name: "" });
+                    await loadOrganization(organizationId);
+                  })
+                }
+              >
+                {t("manager.createCounter")}
+              </button>
+            </div>
+          </Card>
+
           <Card
             title={`${t("manager.queues")}${branchId ? ` · ${branches.find((b) => b.id === branchId)?.name ?? ""}` : ""}`}
           >
@@ -895,6 +1144,18 @@ function ManagerDashboard() {
                     }
                   />
                 </label>
+                <label className="field">
+                  <span>{t("manager.queuePrefix")}</span>
+                  <input
+                    className="input"
+                    maxLength={3}
+                    placeholder="A"
+                    value={queueForm.prefix}
+                    onChange={(event) =>
+                      setQueueForm({ ...queueForm, prefix: event.target.value })
+                    }
+                  />
+                </label>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -908,10 +1169,13 @@ function ManagerDashboard() {
                           ...(queueForm.description
                             ? { description: queueForm.description }
                             : {}),
+                          ...(queueForm.prefix.trim()
+                            ? { prefix: queueForm.prefix.trim() }
+                            : {}),
                           status: "OPEN",
                         },
                       });
-                      setQueueForm({ name: "", description: "" });
+                      setQueueForm({ name: "", description: "", prefix: "" });
                       await loadQueues(branchId);
                     })
                   }
@@ -1086,6 +1350,25 @@ function ManagerDashboard() {
                   ))}
                 </select>
               </label>
+              <label className="field">
+                <span>{t("manager.memberCounter")}</span>
+                <select
+                  className="input"
+                  value={memberForm.counterId}
+                  onChange={(event) =>
+                    setMemberForm({ ...memberForm, counterId: event.target.value })
+                  }
+                >
+                  <option value="">{t("manager.noCounter")}</option>
+                  {counters
+                    .filter((counter) => counter.active)
+                    .map((counter) => (
+                      <option key={counter.id} value={counter.id}>
+                        {counter.name} · {counter.branch.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -1105,6 +1388,7 @@ function ManagerDashboard() {
                         password: memberForm.password,
                         role: memberForm.role,
                         branchId: memberForm.branchId || null,
+                        counterId: memberForm.counterId || null,
                       },
                     });
                     setMemberForm({
@@ -1113,6 +1397,7 @@ function ManagerDashboard() {
                       password: "",
                       role: "STAFF",
                       branchId: "",
+                      counterId: "",
                     });
                     await loadOrganization(organizationId);
                   })

@@ -107,8 +107,8 @@ const envSchema = z.object({
   AGT_PRIVATE_KEY: blankToUndefined(z.string().min(1).optional()),
   AGT_HASH_SECRET: blankToUndefined(z.string().min(16).optional()),
 
-  /** Length of the trial granted when an organization is created. */
-  TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
+  /** Length of the free trial granted when an organization is created (1 month). */
+  TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(30),
   /** Plan code attached to a new organization's trial. */
   TRIAL_PLAN_CODE: z.string().trim().min(1).max(60).default("trial"),
 

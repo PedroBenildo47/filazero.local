@@ -17,9 +17,10 @@ import {
 } from "./support";
 
 interface Board {
-  queue: { id: string; name: string; status: string };
+  queue: { id: string; name: string; status: string; publicCode: string };
   currentTicketNumber: number | null;
   waiting: { ticketNumber: number; position: number }[];
+  recent: { ticketNumber: number; status: string; at: string }[];
   waitingCount: number;
   kioskEnabled: boolean;
 }
@@ -112,6 +113,15 @@ export async function runKioskSuite(options: {
     "kiosk: the board shows the ticket being served",
     boardAfter.data?.currentTicketNumber,
     1,
+  );
+  reporter.check(
+    "kiosk: the board keeps a recent-calls history",
+    (boardAfter.data?.recent ?? []).some((entry) => entry.ticketNumber === 1),
+  );
+  reporter.check(
+    "kiosk: the board exposes the queue public code for the tracking QR",
+    typeof boardAfter.data?.queue.publicCode === "string" &&
+      (boardAfter.data?.queue.publicCode.length ?? 0) > 0,
   );
 
   reporter.errorCode(

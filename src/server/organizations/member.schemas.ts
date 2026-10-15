@@ -24,6 +24,8 @@ export const addMemberSchema = z
     role: memberRoleSchema,
     /** null / omitted = access to every branch of the organization. */
     branchId: uuidSchema.nullish(),
+    /** Optional service counter (guichê) this member works at. */
+    counterId: uuidSchema.nullish(),
   })
   .refine(
     (value) => Boolean(value.userId) || Boolean(value.name && value.email && value.password),
@@ -36,6 +38,7 @@ export const addMemberSchema = z
 export const updateMemberSchema = z.object({
   role: memberRoleSchema.optional(),
   branchId: uuidSchema.nullish(),
+  counterId: uuidSchema.nullish(),
   status: z.nativeEnum(MemberStatus).optional(),
 });
 

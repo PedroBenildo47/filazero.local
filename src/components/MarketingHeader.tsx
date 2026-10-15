@@ -48,12 +48,12 @@ export function MarketingHeader() {
                 <Avatar name={user.name} />
                 {user.name}
               </span>
-              <Link href={panelHref(user.role)} className="btn btn-primary">
+              <Link href={panelHref(user.role)} className="btn btn-accent">
                 {t("landing.goToPanel")}
               </Link>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-outline-light"
                 onClick={() => void logout()}
               >
                 {t("nav.logout")}
@@ -61,10 +61,10 @@ export function MarketingHeader() {
             </>
           ) : (
             <>
-              <Link href="/login" className="btn btn-ghost">
+              <Link href="/login" className="btn btn-outline-light">
                 {t("landing.enterCustomer")}
               </Link>
-              <Link href="/registar-organizacao" className="btn btn-primary">
+              <Link href="/registar-organizacao" className="btn btn-accent">
                 {t("landing.registerCompany")}
               </Link>
             </>

@@ -57,6 +57,7 @@ export function Footer() {
       </div>
       <div className="footer-bottom">
         <span>{t("footer.copyright", { year: new Date().getFullYear() })}</span>
+        <span className="footer-region">{t("footer.region")}</span>
       </div>
     </footer>
   );

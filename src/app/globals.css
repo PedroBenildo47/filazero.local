@@ -2582,3 +2582,191 @@ select.input {
 .atm-card .row.spread {
   align-items: flex-start;
 }
+
+/* ==========================================================================
+   Landing premium — dark slate + vibrant orange (official visual)
+   ========================================================================== */
+
+:root {
+  --accent: #ff5500;
+  --accent-2: #ff7a1a;
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #ff5500, #ff7a1a);
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 30px rgba(255, 85, 0, 0.35);
+}
+.btn-accent:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn-outline-light {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+.btn-outline-light:hover {
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+.mkt-header {
+  background: rgba(10, 14, 23, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mkt-header .brand,
+.mkt-links a {
+  color: #e2e8f0;
+}
+.mkt-links a:hover {
+  color: var(--accent-2);
+}
+.brand-mark {
+  background: linear-gradient(135deg, #ff5500, #ff7a1a);
+  color: #ffffff;
+}
+
+.mkt-main {
+  background:
+    radial-gradient(60% 50% at 82% 0%, rgba(255, 85, 0, 0.16), transparent 60%),
+    radial-gradient(50% 40% at 8% 18%, rgba(56, 189, 248, 0.1), transparent 60%),
+    #0a0e17;
+  color: #e2e8f0;
+}
+
+.mkt-eyebrow {
+  color: var(--accent-2);
+}
+.mkt-hero-title {
+  color: #ffffff;
+}
+.mkt-accent {
+  color: var(--accent);
+}
+.mkt-hero-subtitle {
+  color: #94a3b8;
+}
+
+.mkt-hero-visual {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #0f172a;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.mkt-float-card {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.mkt-float-card strong {
+  color: #ffffff;
+}
+.mkt-float-card span {
+  color: #94a3b8;
+}
+
+.mkt-section {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+.mkt-section-head h2 {
+  color: #ffffff;
+}
+.mkt-section-head p {
+  color: #94a3b8;
+}
+.mkt-section-alt {
+  background: #0d1320;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mkt-how-card {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.mkt-how-card h3 {
+  color: #ffffff;
+}
+.mkt-how-card p {
+  color: #94a3b8;
+}
+.mkt-how-index {
+  color: var(--accent);
+}
+
+.mkt-plan {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.mkt-plan h3 {
+  color: #ffffff;
+}
+.mkt-plan-price {
+  color: #ffffff;
+}
+.mkt-plan-price span {
+  color: #94a3b8;
+}
+.mkt-plan-desc {
+  color: #94a3b8;
+}
+.mkt-plan-limits {
+  color: #64748b;
+}
+.mkt-plan.is-recommended {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px rgba(255, 85, 0, 0.5),
+    0 20px 60px rgba(255, 85, 0, 0.25);
+}
+.mkt-plan-badge {
+  background: linear-gradient(135deg, #ff5500, #ff7a1a);
+  color: #ffffff;
+}
+.mkt-plans-note {
+  color: #94a3b8;
+}
+
+.mkt-business {
+  background: linear-gradient(135deg, #0a0e17 0%, #1a0f05 55%, #0a0e17 100%);
+  border-color: rgba(255, 85, 0, 0.25);
+}
+.mkt-business h2 {
+  color: #ffffff;
+}
+.mkt-business p {
+  color: #cbd5e1;
+}
+
+/* Dark premium footer */
+.footer {
+  background: #080b12;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.footer-name,
+.footer-link {
+  color: #ffffff;
+}
+.footer-brand p,
+.footer-contact-email {
+  color: #94a3b8;
+}
+.footer-heading {
+  color: #e2e8f0;
+}
+.footer-link:hover {
+  color: var(--accent-2);
+}
+.footer-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #64748b;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.footer-region {
+  color: var(--accent-2);
+  font-weight: 600;
+}

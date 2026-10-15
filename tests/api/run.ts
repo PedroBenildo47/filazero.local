@@ -882,11 +882,21 @@ async function main() {
   eq("frontend: the landing page renders", landing.status, 200);
   ok(
     "frontend: the default language is Portuguese",
-    landingBody.includes("Menos fila. Mais vida."),
+    // The hero title splits the word "fila" into an accent span, so the raw
+    // HTML is no longer contiguous — assert on the surrounding copy and mark.
+    landingBody.includes("Mais vida.") && landingBody.includes("mkt-accent"),
   );
   ok(
     "frontend: the language switcher is present",
     landingBody.includes("lang-btn") && landingBody.includes("PT") && landingBody.includes("EN"),
+  );
+  ok(
+    "frontend: the landing uses the orange accent call-to-action",
+    landingBody.includes("btn-accent") && landingBody.includes("btn-outline-light"),
+  );
+  ok(
+    "frontend: the footer shows the region and languages",
+    landingBody.includes("Angola · PT / EN"),
   );
   for (const path of ["/pesquisar", "/login", "/registar"]) {
     const page = await anonymous.request(path);

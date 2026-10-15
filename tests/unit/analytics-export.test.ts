@@ -42,6 +42,9 @@ const labels: AnalyticsReportLabels = {
   weekStart: "Início da semana",
   queuePerformance: "Tempos por fila",
   branchPerformance: "Tempos por filial",
+  staffPerformance: "Tempo de atendimento por funcionário",
+  staff: "Funcionário",
+  servedTickets: "Atendidos",
   branch: "Filial",
   queue: "Fila",
   completed: "Atendidas",
@@ -58,6 +61,7 @@ const labels: AnalyticsReportLabels = {
     NO_SHOW: "Não compareceu",
   },
   hourly: "Atendimentos concluídos por hora",
+  issuedHourly: "Fluxo por horário (senhas emitidas)",
   hour: "Hora",
 };
 
@@ -109,6 +113,19 @@ function report(overrides: Partial<OrganizationAnalyticsReport> = {}): Organizat
         averageServiceSeconds: null,
       },
     ],
+    staffPerformance: [
+      {
+        staffId: "u1",
+        staffName: "Joana",
+        servedTickets: 8,
+        averageWaitSeconds: 450,
+        averageServiceSeconds: 750,
+      },
+    ],
+    issuedByHour: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: hour === 8 ? 4 : 0,
+    })),
     statusDistribution: [
       { status: "WAITING", count: 0 },
       { status: "CALLED", count: 0 },

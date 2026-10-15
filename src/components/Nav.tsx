@@ -19,9 +19,8 @@ export function Nav() {
   // The public landing page renders its own marketing header (MarketingHeader).
   if (pathname === "/") return null;
 
-  const isStaff =
-    user?.role === "STAFF" || user?.role === "MANAGER" || user?.role === "ADMINISTRATOR";
-  const isManager = user?.role === "MANAGER" || user?.role === "ADMINISTRATOR";
+  const isStaff = user?.role === "STAFF" || user?.role === "MANAGER";
+  const isManager = user?.role === "MANAGER";
   const isAdmin = user?.role === "ADMINISTRATOR";
 
   const link = (href: string, label: string) => (
@@ -45,12 +44,22 @@ export function Nav() {
         </Link>
 
         <div className="nav-links">
-          {link("/", t("nav.home"))}
-          {link("/pesquisar", t("nav.search"))}
-          {user && link("/conta", t("nav.account"))}
-          {isStaff && link("/staff", t("nav.staff"))}
-          {isManager && link("/gestor", t("nav.manage"))}
-          {isAdmin && link("/admin", t("nav.admin"))}
+          {/* The platform owner only needs the administration surface — no
+              customer search, front-desk or tenant-management tabs. */}
+          {isAdmin ? (
+            <>
+              {link("/", t("nav.home"))}
+              {link("/admin", t("nav.admin"))}
+            </>
+          ) : (
+            <>
+              {link("/", t("nav.home"))}
+              {link("/pesquisar", t("nav.search"))}
+              {user && link("/conta", t("nav.account"))}
+              {isStaff && link("/staff", t("nav.staff"))}
+              {isManager && link("/gestor", t("nav.manage"))}
+            </>
+          )}
         </div>
 
         <div className="nav-actions">

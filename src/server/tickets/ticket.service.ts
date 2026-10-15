@@ -635,7 +635,12 @@ export async function callNext(
 
     const called = await tx.ticket.update({
       where: { id: nextId },
-      data: { status: "CALLED", calledAt: new Date(), position: null },
+      data: {
+        status: "CALLED",
+        calledAt: new Date(),
+        position: null,
+        servedById: ctx.user.id,
+      },
     });
 
     await tx.queue.update({
@@ -696,7 +701,7 @@ export async function startServing(
 
     const serving = await tx.ticket.update({
       where: { id: ticketId },
-      data: { status: "SERVING", servingAt: new Date() },
+      data: { status: "SERVING", servingAt: new Date(), servedById: ctx.user.id },
     });
 
     await tx.queue.update({

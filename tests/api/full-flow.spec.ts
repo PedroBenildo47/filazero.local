@@ -82,7 +82,7 @@ export async function runFullFlowSuite(options: {
     reporter.equal("e2e: the public landing page renders", landing.status, 200);
     reporter.check(
       "e2e: the landing page is the Portuguese marketing page",
-      landingHtml.includes("Menos fila. Mais vida."),
+      landingHtml.includes("Mais vida.") && landingHtml.includes("mkt-accent"),
     );
 
     /* ------------------------------------------------------------------ */
@@ -120,6 +120,12 @@ export async function runFullFlowSuite(options: {
       "e2e: the paid plan catalogue is public and contains a starter plan",
       starter !== null && starter.priceCents > 0,
       starter?.code,
+    );
+    reporter.check(
+      "e2e: the catalogue is priced in Kwanza (Profissional 200.000 Kz + a free plan)",
+      (plans.data?.items ?? []).some(
+        (plan) => plan.name === "Profissional" && plan.priceCents === 20_000_000,
+      ) && (plans.data?.items ?? []).some((plan) => plan.priceCents === 0),
     );
     if (!organizationId || !starter) return;
 

@@ -123,6 +123,7 @@ function AdminDashboard() {
   // Delete confirmation modal.
   const [deleting, setDeleting] = useState<AdminOrganization | null>(null);
   const [deleteName, setDeleteName] = useState("");
+  const [forceDelete, setForceDelete] = useState(false);
 
   const loadFinance = useCallback(async () => {
     setFinance(await api<PlatformFinance>("/api/admin/finance?months=12"));
@@ -226,10 +227,11 @@ function AdminDashboard() {
     await run(async () => {
       await api(`/api/admin/organizations/${deleting.id}`, {
         method: "DELETE",
-        json: { confirmName: deleteName.trim() },
+        json: { confirmName: deleteName.trim(), force: forceDelete },
       });
       setDeleting(null);
       setDeleteName("");
+      setForceDelete(false);
       await Promise.all([loadOrganizations(orgQuery), loadFinance()]);
     }, t("admin.deleteSuccess"));
   }
@@ -668,6 +670,18 @@ function AdminDashboard() {
                 autoFocus
               />
             </label>
+            <label className="row" style={{ gap: "0.5rem", alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={forceDelete}
+                onChange={(event) => setForceDelete(event.target.checked)}
+              />
+              <span>
+                <strong>{t("admin.deleteForceLabel")}</strong>
+                <br />
+                <small className="muted">{t("admin.deleteForceHint")}</small>
+              </span>
+            </label>
             <div className="row qr-actions">
               <button
                 type="button"
@@ -686,6 +700,7 @@ function AdminDashboard() {
                 onClick={() => {
                   setDeleting(null);
                   setDeleteName("");
+                  setForceDelete(false);
                 }}
               >
                 {t("common.cancel")}

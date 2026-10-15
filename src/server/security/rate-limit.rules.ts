@@ -26,6 +26,7 @@ export const RATE_LIMITS: Record<
   | "login"
   | "register"
   | "organizationRegister"
+  | "atmReport"
   | "passwordForgot"
   | "passwordReset"
   | "passwordChange",
@@ -42,6 +43,10 @@ export const RATE_LIMITS: Record<
   },
   organizationRegister: {
     ip: { windowSeconds: 3_600, max: 5 },
+  },
+  // ATM status reports: open to citizens, but bounded per IP.
+  atmReport: {
+    ip: { windowSeconds: 600, max: 30 },
   },
   // Recovery: a reset email is expensive and abusable.
   passwordForgot: {

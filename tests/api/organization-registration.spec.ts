@@ -168,6 +168,7 @@ export async function runOrganizationRegistrationSuite(options: {
 
   const financialEmail = `financial.${Date.now()}@api.filazero.test`;
   const financialResponse = await new ApiClient(baseUrl).postForm<{
+    user: { id: string };
     organization: { id: string; status: string };
     documentTypes: DocumentType[];
   }>(
@@ -181,4 +182,20 @@ export async function runOrganizationRegistrationSuite(options: {
   reporter.equal("organization registration: financial institutions activate with all licenses", financialResponse.status, 201);
   reporter.equal("organization registration: financial organization is active", financialResponse.data?.organization.status, "ACTIVE");
   reporter.equal("organization registration: all four document types are acknowledged", financialResponse.data?.documentTypes.length, 4);
+
+  // Clean up the organizations and owners this suite registered, so a real
+  // database is not left with test tenants after the run.
+  const createdOrgIds = [organizationId, financialResponse.data?.organization.id].filter(
+    (id): id is string => Boolean(id),
+  );
+  const createdUserIds = [
+    standardResponse.data?.user.id,
+    financialResponse.data?.user.id,
+  ].filter((id): id is string => Boolean(id));
+  if (createdOrgIds.length > 0) {
+    await db.organization.deleteMany({ where: { id: { in: createdOrgIds } } }).catch(() => undefined);
+  }
+  if (createdUserIds.length > 0) {
+    await db.user.deleteMany({ where: { id: { in: createdUserIds } } }).catch(() => undefined);
+  }
 }

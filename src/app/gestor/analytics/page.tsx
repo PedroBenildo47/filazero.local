@@ -45,7 +45,15 @@ interface AnalyticsData {
     averageWaitSeconds: number | null;
     averageServiceSeconds: number | null;
   }>;
+  staffPerformance: Array<{
+    staffId: string;
+    staffName: string;
+    servedTickets: number;
+    averageWaitSeconds: number | null;
+    averageServiceSeconds: number | null;
+  }>;
   statusDistribution: Array<{ status: TicketStatus; count: number }>;
+  issuedByHour: Array<{ hour: number; count: number }>;
   completedByHour: Array<{ hour: number; count: number }>;
   peak: {
     busiestDay: { date: string; count: number } | null;
@@ -224,6 +232,7 @@ function AnalyticsDashboard() {
   const dailyPoints = data?.issuedByDay.map((row) => ({ label: row.date.slice(5), value: row.count })) ?? [];
   const weeklyPoints = data?.issuedByWeek.map((row) => ({ label: row.weekStart.slice(5), value: row.count })) ?? [];
   const hourlyPoints = data?.completedByHour.map((row) => ({ label: `${String(row.hour).padStart(2, "0")}h`, value: row.count })) ?? [];
+  const issuedHourlyPoints = data?.issuedByHour.map((row) => ({ label: `${String(row.hour).padStart(2, "0")}h`, value: row.count })) ?? [];
 
   if (loadingOrganizations) {
     return (
@@ -378,6 +387,41 @@ function AnalyticsDashboard() {
                 </table>
               </div>
             )}
+          </Card>
+
+          <Card title={t("analytics.staffPerformance")}>
+            {data.staffPerformance.length === 0 ? (
+              <EmptyState>{t("analytics.noData")}</EmptyState>
+            ) : (
+              <div className="analytics-table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{t("analytics.staff")}</th>
+                      <th className="nums">{t("analytics.servedTickets")}</th>
+                      <th className="nums">{t("analytics.averageWait")}</th>
+                      <th className="nums">{t("analytics.averageService")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.staffPerformance.map((staff) => (
+                      <tr key={staff.staffId}>
+                        <td>{staff.staffName}</td>
+                        <td className="nums">{staff.servedTickets}</td>
+                        <td className="nums">{formatDuration(staff.averageWaitSeconds, locale, "—")}</td>
+                        <td className="nums">{formatDuration(staff.averageServiceSeconds, locale, "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          <Card title={t("analytics.issuedByHour")}>
+            {issuedHourlyPoints.some((point) => point.value > 0) ? (
+              <BarChart points={issuedHourlyPoints} label={t("analytics.issuedByHour")} showEvery={2} />
+            ) : <EmptyState>{t("analytics.noData")}</EmptyState>}
           </Card>
 
           <Card title={t("analytics.statusDistribution")}>

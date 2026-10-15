@@ -47,6 +47,9 @@ export interface AnalyticsReportLabels {
   weekStart: string;
   queuePerformance: string;
   branchPerformance: string;
+  staffPerformance: string;
+  staff: string;
+  servedTickets: string;
   branch: string;
   queue: string;
   completed: string;
@@ -56,6 +59,7 @@ export interface AnalyticsReportLabels {
   status: string;
   statusLabels: Record<AnalyticsTicketStatus, string>;
   hourly: string;
+  issuedHourly: string;
   hour: string;
 }
 
@@ -196,6 +200,29 @@ export function buildAnalyticsCsv(
   }
   blank();
 
+  // ---- Staff performance -------------------------------------------------
+  lines.push(
+    row([
+      labels.staffPerformance,
+      labels.staff,
+      labels.servedTickets,
+      labels.averageWaitSeconds,
+      labels.averageServiceSeconds,
+    ]),
+  );
+  for (const entry of report.staffPerformance) {
+    lines.push(
+      row([
+        labels.staffPerformance,
+        entry.staffName,
+        entry.servedTickets,
+        seconds(entry.averageWaitSeconds),
+        seconds(entry.averageServiceSeconds),
+      ]),
+    );
+  }
+  blank();
+
   // ---- Status distribution ----------------------------------------------
   lines.push(row([labels.statusDistribution, labels.status, labels.tickets]));
   for (const entry of report.statusDistribution) {
@@ -204,6 +231,12 @@ export function buildAnalyticsCsv(
   blank();
 
   // ---- Hourly distribution ----------------------------------------------
+  lines.push(row([labels.issuedHourly, labels.hour, labels.tickets]));
+  for (const entry of report.issuedByHour) {
+    lines.push(row([labels.issuedHourly, entry.hour, entry.count]));
+  }
+  blank();
+
   lines.push(row([labels.hourly, labels.hour, labels.completed]));
   for (const entry of report.completedByHour) {
     lines.push(row([labels.hourly, entry.hour, entry.count]));

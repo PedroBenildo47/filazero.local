@@ -75,6 +75,7 @@ function CheckoutFlow() {
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
   const [proofSent, setProofSent] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("plan");
@@ -113,6 +114,7 @@ function CheckoutFlow() {
     setBusy(true);
     setError(null);
     setProofSent(false);
+    setConfirmed(false);
     try {
       const data = await api<CheckoutResult>("/api/billing/checkout", {
         method: "POST",
@@ -154,6 +156,30 @@ function CheckoutFlow() {
     }
   }
 
+  // Poll the transaction until the signed webhook confirms it, so the payer
+  // sees the subscription activate without leaving the payment screen.
+  useEffect(() => {
+    if (!result || !organization || confirmed) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const data = await api<{ items: { id: string; status: string }[] }>(
+          `/api/organizations/${organization.id}/transactions?pageSize=10`,
+        );
+        const match = data.items.find((item) => item.id === result.transaction.id);
+        if (active && match?.status === "SUCCEEDED") setConfirmed(true);
+      } catch {
+        /* transient; the next tick retries */
+      }
+    };
+    void check();
+    const id = window.setInterval(() => void check(), 6000);
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
+  }, [result, organization, confirmed]);
+
   if (loading) {
     return (
       <main className="container">
@@ -192,7 +218,11 @@ function CheckoutFlow() {
             <StatCard label={t("checkout.method")} value={t(paymentMethodKey(result.transaction.method))} />
           </div>
 
-          <Alert kind="info">{t("checkout.pending")}</Alert>
+          {confirmed ? (
+            <Alert kind="success">{t("checkout.confirmed")}</Alert>
+          ) : (
+            <Alert kind="info">{t("checkout.pending")}</Alert>
+          )}
 
           {result.instructions ? (
             <>

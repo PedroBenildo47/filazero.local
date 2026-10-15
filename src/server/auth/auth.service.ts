@@ -13,6 +13,7 @@ import { recordAudit } from "@/server/audit/audit.service";
 import { hashPassword, verifyPassword } from "./password";
 import { createSession, revokeSession } from "./session.store";
 import { generateOpaqueToken, hashToken } from "./tokens";
+import { attachCustomerTrial } from "@/server/customer/customer-subscription.service";
 import { sendPasswordResetEmail } from "@/server/email/email.service";
 import type { EmailLang } from "@/server/email/templates";
 import type {
@@ -56,6 +57,10 @@ export async function register(
     }
     throw error;
   }
+
+  // Every end customer starts a free month; after it, continued use requires
+  // the 2.000 Kz/month subscription (enforced when joining a queue).
+  await attachCustomerTrial(user.id).catch(() => undefined);
 
   const session = await createSession(user.id, meta);
   await recordAudit(db, {

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -385,23 +386,28 @@ function AdminDashboard() {
           <h1>{t("admin.title")}</h1>
           <p className="muted">{t("admin.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={busy}
-          onClick={() =>
-            void run(async () => {
-              await Promise.all([
-                loadFinance(),
-                loadOrganizations(orgQuery),
-                loadAudit(auditQuery),
-                loadMonitoring(),
-              ]);
-            })
-          }
-        >
-          {t("admin.refresh")}
-        </button>
+        <div className="row">
+          <Link href="/admin/atms" className="btn btn-ghost">
+            {t("adminAtms.manage")}
+          </Link>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                await Promise.all([
+                  loadFinance(),
+                  loadOrganizations(orgQuery),
+                  loadAudit(auditQuery),
+                  loadMonitoring(),
+                ]);
+              })
+            }
+          >
+            {t("admin.refresh")}
+          </button>
+        </div>
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}

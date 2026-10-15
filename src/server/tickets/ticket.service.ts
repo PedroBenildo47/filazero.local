@@ -35,6 +35,7 @@ import { publishQueueEvent } from "@/server/realtime/bus";
 import { scheduleNotificationDrain } from "@/server/notifications/notification-dispatch.service";
 import { normalizePhone } from "@/server/notifications/notification-messages";
 import { ACTIVE_TICKET_STATUSES, assertTicketTransition } from "./ticket.state";
+import { assertCustomerOperational } from "@/server/customer/customer-subscription.service";
 
 export { ACTIVE_TICKET_STATUSES, TERMINAL_TICKET_STATUSES } from "./ticket.state";
 
@@ -287,6 +288,12 @@ export async function joinQueue(
   meta: RequestMeta,
 ) {
   requirePermission(ctx, "ticket:join");
+
+  // End customers need an active subscription (free month or paid) to join.
+  // Staff/managers/administrators act on behalf of the organization.
+  if (ctx.user.role === "CUSTOMER") {
+    await assertCustomerOperational(ctx.user.id);
+  }
 
   const result = await db.$transaction(async (tx) => {
     // Lock the queue row: serialises ticket_number generation for this queue.

@@ -32,7 +32,10 @@ export const POST = route(async (request) => {
 
   return ok({
     received: true,
+    scope: outcome.scope,
     duplicate: outcome.duplicate,
-    transaction: outcome.transaction,
+    // Both surfaces expose the applied row under `transaction` for a stable
+    // provider contract; the `scope` tells them apart.
+    transaction: outcome.scope === "organization" ? outcome.transaction : outcome.payment,
   });
 });

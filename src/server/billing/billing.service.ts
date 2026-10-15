@@ -54,6 +54,11 @@ import { signInvoice } from "./invoice-signing";
 import { deliverPaymentReceipt } from "./receipt.service";
 import { verifySignature } from "./signature";
 import { getSubscription } from "./subscription.service";
+import {
+  applyCustomerPaymentEvent,
+  isCustomerPaymentReference,
+  type CustomerPaymentView,
+} from "@/server/customer/customer-subscription.service";
 
 /* -------------------------------------------------------------------------- */
 /* Serialisation                                                               */
@@ -292,16 +297,21 @@ export async function assignPlan(
 /* Webhook                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export interface WebhookOutcome {
+export interface OrganizationWebhookOutcome {
   duplicate: boolean;
   transaction: ReturnType<typeof serializeTransaction>;
 }
+
+/** The webhook serves both the B2B (organization) and B2C (customer) surfaces. */
+export type WebhookOutcome =
+  | (OrganizationWebhookOutcome & { scope: "organization" })
+  | { duplicate: boolean; scope: "customer"; payment: CustomerPaymentView };
 
 /** Applies a normalised event atomically and idempotently. */
 export async function applyPaymentEvent(
   event: NormalizedPaymentEvent,
   meta: RequestMeta,
-): Promise<WebhookOutcome> {
+): Promise<OrganizationWebhookOutcome> {
   const result = await db.$transaction(async (tx) => {
     const transaction = await tx.transaction.findUnique({
       where: { reference: event.reference },
@@ -519,7 +529,14 @@ export async function handlePaymentWebhook(
   }
 
   try {
-    return await applyPaymentEvent(event, meta);
+    // A reference belongs either to an organization invoice or to an
+    // end-customer subscription payment.
+    if (await isCustomerPaymentReference(event.reference)) {
+      const outcome = await applyCustomerPaymentEvent(event, meta);
+      return { duplicate: outcome.duplicate, scope: "customer", payment: outcome.payment };
+    }
+    const outcome = await applyPaymentEvent(event, meta);
+    return { ...outcome, scope: "organization" };
   } catch (error) {
     // A concurrent duplicate could hit the unique provider_event_id: that is a
     // success from the provider's point of view, not an error.
@@ -531,7 +548,11 @@ export async function handlePaymentWebhook(
       // unique conflict (e.g. an invoicing invariant) must surface as an error
       // instead of silently pretending the payment was applied.
       if (existing && existing.providerEventId === event.eventId) {
-        return { duplicate: true, transaction: serializeTransaction(existing) };
+        return {
+          duplicate: true,
+          scope: "organization",
+          transaction: serializeTransaction(existing),
+        };
       }
     }
     throw error;

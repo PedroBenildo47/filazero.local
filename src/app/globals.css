@@ -2534,3 +2534,51 @@ select.input {
 .alert-row > span:first-of-type {
   flex: 1;
 }
+
+/* --------------------------------------------------------------------------
+   ATM directory
+   -------------------------------------------------------------------------- */
+
+.atm-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+}
+
+.atm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--fg-muted);
+}
+
+.atm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.atm-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.atm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.atm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.atm-card .row.spread {
+  align-items: flex-start;
+}

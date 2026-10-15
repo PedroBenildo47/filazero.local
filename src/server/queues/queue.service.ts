@@ -54,6 +54,7 @@ export function publicQueue(queue: Queue) {
     organizationId: queue.organizationId,
     branchId: queue.branchId,
     publicCode: queue.publicCode,
+    prefix: queue.prefix,
     name: queue.name,
     description: queue.description,
     status: queue.status,
@@ -116,6 +117,7 @@ export async function createQueue(
           publicCode: generateQueueCode(),
           name: input.name,
           description: input.description ?? null,
+          prefix: input.prefix ? input.prefix : null,
           status: input.status ?? "CLOSED",
         },
       });
@@ -232,6 +234,7 @@ export async function updateQueue(
     data: {
       ...(input.name === undefined ? {} : { name: input.name }),
       ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.prefix === undefined ? {} : { prefix: input.prefix || null }),
       ...(input.status === undefined ? {} : { status: input.status }),
     },
   });
@@ -330,6 +333,7 @@ export async function getPublicQueue(queueIdOrCode: string) {
     select: {
       id: true,
       publicCode: true,
+      prefix: true,
       name: true,
       description: true,
       status: true,

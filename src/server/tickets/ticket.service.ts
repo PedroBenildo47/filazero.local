@@ -385,6 +385,162 @@ export async function joinQueue(
   return ticketContext(result.ticket);
 }
 
+/** Re-announces a called/serving ticket (the customer may have missed it). */
+export async function recallTicket(
+  ctx: AuthContext,
+  ticketId: string,
+  meta: RequestMeta,
+) {
+  const result = await db.$transaction(async (tx) => {
+    const ticket = await requireTicketForStaff(tx, ctx, ticketId, "ticket:call");
+    if (ticket.status !== "CALLED" && ticket.status !== "SERVING") {
+      throw AppError.invalidState("Only a called or serving ticket can be recalled");
+    }
+
+    const recalled = await tx.ticket.update({
+      where: { id: ticketId },
+      data: { updatedAt: new Date(), calledAt: new Date() },
+    });
+
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "CUSTOMER_CALLED",
+        title: "Chamada repetida",
+        message: `A senha nº ${ticket.ticketNumber} foi chamada novamente.`,
+        ticketId: ticket.id,
+      });
+    }
+
+    await recordAudit(tx, {
+      actorUserId: ctx.user.id,
+      action: "ticket.recall",
+      entityType: "ticket",
+      entityId: ticket.id,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return { ticket: recalled, organizationId: ticket.queue.organizationId };
+  });
+
+  publishQueueEvent({
+    type: "ticket.called",
+    queueId: result.ticket.queueId,
+    organizationId: result.organizationId,
+    ticketId: result.ticket.id,
+    ticketNumber: result.ticket.ticketNumber,
+    ticketStatus: result.ticket.status,
+  });
+
+  scheduleNotificationDrain();
+  return ticketContext(result.ticket);
+}
+
+/**
+ * Moves an active ticket to another open queue of the same organization.
+ * The ticket keeps its id (the customer keeps tracking the same ticket) but gets
+ * a new number inside the target queue.
+ */
+export async function transferTicket(
+  ctx: AuthContext,
+  ticketId: string,
+  targetQueueId: string,
+  meta: RequestMeta,
+) {
+  const result = await db.$transaction(async (tx) => {
+    const ticket = await requireTicketForStaff(tx, ctx, ticketId, "ticket:call");
+    if (ticket.queueId === targetQueueId) {
+      throw AppError.badRequest("The ticket is already in this queue");
+    }
+    if (!ACTIVE_TICKET_STATUSES.includes(ticket.status)) {
+      throw AppError.invalidState("Only an active ticket can be transferred");
+    }
+
+    const rows = await tx.$queryRaw<LockedQueueRow[]>`
+      SELECT id, status, organization_id, branch_id, ticket_sequence
+      FROM queues
+      WHERE id = ${targetQueueId}::uuid
+      FOR UPDATE
+    `;
+    const target = rows[0];
+    if (!target) throw AppError.notFound("Target queue not found");
+    if (target.organization_id !== ticket.queue.organizationId) {
+      throw AppError.badRequest("The target queue belongs to another organization");
+    }
+    if (target.status !== "OPEN") {
+      throw AppError.queueClosed("The target queue is not open");
+    }
+
+    const ticketNumber = target.ticket_sequence + 1;
+    await tx.queue.update({
+      where: { id: targetQueueId },
+      data: { ticketSequence: ticketNumber },
+    });
+
+    const moved = await tx.ticket.update({
+      where: { id: ticketId },
+      data: {
+        queueId: targetQueueId,
+        ticketNumber,
+        status: "WAITING",
+        position: null,
+        calledAt: null,
+        servingAt: null,
+        servedById: null,
+      },
+    });
+
+    // The source queue is no longer serving this ticket.
+    await tx.queue.updateMany({
+      where: { id: ticket.queueId, currentTicketId: ticketId },
+      data: { currentTicketId: null },
+    });
+
+    await recomputePositions(tx, ticket.queueId);
+    await recomputePositions(tx, targetQueueId);
+
+    const targetQueue = await tx.queue.findUnique({
+      where: { id: targetQueueId },
+      select: { name: true, prefix: true },
+    });
+
+    if (ticket.userId) {
+      await createNotification(tx, {
+        userId: ticket.userId,
+        type: "QUEUE_JOINED",
+        title: "Transferido para outra fila",
+        message: `A sua senha foi transferida para a fila "${targetQueue?.name ?? ""}" e agora é a nº ${ticketNumber}.`,
+        ticketId: ticket.id,
+      });
+    }
+
+    await recordAudit(tx, {
+      actorUserId: ctx.user.id,
+      action: "ticket.transfer",
+      entityType: "ticket",
+      entityId: ticket.id,
+      metadata: { fromQueueId: ticket.queueId, toQueueId: targetQueueId, ticketNumber },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return { ticket: moved, organizationId: ticket.queue.organizationId };
+  });
+
+  publishQueueEvent({
+    type: "ticket.joined",
+    queueId: result.ticket.queueId,
+    organizationId: result.organizationId,
+    ticketId: result.ticket.id,
+    ticketNumber: result.ticket.ticketNumber,
+    ticketStatus: result.ticket.status,
+  });
+
+  scheduleNotificationDrain();
+  return ticketContext(result.ticket);
+}
+
 /** The customer's current active ticket, with a freshly computed position. */
 export async function getMyActiveTicket(ctx: AuthContext) {
   requirePermission(ctx, "ticket:read:self");
@@ -1015,6 +1171,7 @@ export async function getQueueState(
     queue: {
       id: queue.id,
       name: queue.name,
+      prefix: queue.prefix,
       status: queue.status,
       description: queue.description,
     },

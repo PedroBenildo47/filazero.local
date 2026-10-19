@@ -16,6 +16,7 @@ import {
   normalizeIban,
   parseTlv,
   tlv,
+  toAngolaIban,
   tryBuildAngolaBankQr,
   verifyEmvCoChecksum,
 } from "@/server/billing/qr-payment";
@@ -54,6 +55,36 @@ test("Angolan IBAN validation uses the ISO 13616 mod-97 check", () => {
   assert.equal(isValidAngolaIban("PT50000201231234567890154"), false);
   assert.equal(isValidAngolaIban(""), false);
   assert.equal(normalizeIban(" ao06 0006-0000 "), "AO0600060000");
+});
+
+test("toAngolaIban promotes a 21-digit BBAN to a valid IBAN", () => {
+  // Real FilaZero Banco BIC account, as printed by the bank (21 digits).
+  const bban = "005100002109917510176";
+  assert.equal(toAngolaIban(bban), "AO06005100002109917510176");
+  assert.equal(isValidAngolaIban(bban), true);
+  // A full IBAN passes through untouched; junk is left for validation to reject.
+  assert.equal(toAngolaIban("AO06005100002109917510176"), "AO06005100002109917510176");
+  assert.equal(toAngolaIban("AO00"), "AO00");
+  // Any 21-digit account is convertible, but a wrong length is not.
+  assert.equal(isValidAngolaIban("00510000210991751017"), false);
+  assert.equal(isValidAngolaIban("0051000021099175101760"), false);
+});
+
+test("a QR built from the raw BBAN encodes the canonical IBAN", () => {
+  const payload = buildAngolaBankQr({
+    iban: "005100002109917510176",
+    merchantName: "Banco BIC Angola",
+    merchantCity: "Luanda",
+    amountCents: 2500000,
+    reference: "FZ-BIC-0001",
+    acquirerGui: "BIC",
+  });
+  assert.equal(verifyEmvCoChecksum(payload), true);
+  assert.ok(payload.includes("AO06005100002109917510176"));
+  const top = Object.fromEntries(parseTlv(payload).map((e) => [e.tag, e.value]));
+  const domestic = Object.fromEntries(parseTlv(top["26"]!).map((e) => [e.tag, e.value]));
+  assert.equal(domestic["01"], "AO06005100002109917510176");
+  assert.equal(domestic["00"], "BIC");
 });
 
 test("formatQrAmount uses an explicit decimal point", () => {

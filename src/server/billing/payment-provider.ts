@@ -22,8 +22,8 @@ import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
 import { createMulticaixaRequest } from "./multicaixa";
 import { providerForMethod } from "./payment-methods";
-import { normalizeIban, tryBuildAngolaBankQr } from "./qr-payment";
-import { resolveBankName } from "./bank-profiles";
+import { isValidAngolaIban, toAngolaIban, tryBuildAngolaBankQr } from "./qr-payment";
+import { BIC_BANK_DEFAULTS, resolveBankName } from "./bank-profiles";
 
 /** Minimal shape the checkout adapters need from a payable subject. */
 export interface CheckoutSubject {
@@ -63,21 +63,29 @@ export interface BankDetails {
 }
 
 /**
- * Reads the platform bank account from the environment (never hard-coded).
+ * Resolves the platform bank account.
  *
- * Tolerance rule: a missing *secondary* field never crashes the checkout. Only
- * the bank display name has a fallback (`BILLING_BANK_PROFILE`, then BIC); the
- * IBAN/account stay exactly as configured, because inventing a payable
- * destination would be unsafe.
+ * Every field is read from the environment and falls back to the real Banco BIC
+ * defaults ({@link BIC_BANK_DEFAULTS}) when blank, so the transfer/QR path is
+ * always complete and never fails for missing configuration.
+ *
+ * Safety rule: a value that is **present but invalid** is never silently
+ * replaced by the default — that would send money to an unexpected account.
+ * Instead it is reported as `null` and the checkout degrades to the quotable
+ * reference (never a 503).
  */
 export function platformBankDetails(): BankDetails {
   const env = getEnv();
+  const rawIban = env.BILLING_BANK_IBAN ?? BIC_BANK_DEFAULTS.bban;
+  const iban = toAngolaIban(rawIban);
+  const ibanValid = isValidAngolaIban(iban);
+
   return {
     bankName: resolveBankName(env.BILLING_BANK_NAME, env.BILLING_BANK_PROFILE),
-    accountNumber: env.BILLING_BANK_ACCOUNT ?? null,
-    iban: env.BILLING_BANK_IBAN ? normalizeIban(env.BILLING_BANK_IBAN) : null,
-    holder: env.PLATFORM_LEGAL_NAME,
-    configured: Boolean(env.BILLING_BANK_IBAN || env.BILLING_BANK_ACCOUNT),
+    accountNumber: env.BILLING_BANK_ACCOUNT ?? BIC_BANK_DEFAULTS.accountNumber,
+    iban: ibanValid ? iban : null,
+    holder: env.BILLING_BANK_HOLDER ?? BIC_BANK_DEFAULTS.holder,
+    configured: ibanValid || Boolean(env.BILLING_BANK_ACCOUNT ?? BIC_BANK_DEFAULTS.accountNumber),
   };
 }
 
@@ -114,14 +122,15 @@ function formatAmount(priceCents: number, currency: string): string {
 }
 
 function qrInstructions(reference: string, plan: CheckoutPlan): string {
-  const env = getEnv();
+  const bank = platformBankDetails();
   const lines: string[] = [
     "Pagamento por QR Code bancário (EMVCo)",
     `Referência: ${reference}`,
     `Valor: ${formatAmount(plan.priceCents, plan.currency)}`,
   ];
-  if (env.BILLING_BANK_NAME) lines.push(`Banco: ${env.BILLING_BANK_NAME}`);
-  if (env.BILLING_BANK_IBAN) lines.push(`IBAN: ${normalizeIban(env.BILLING_BANK_IBAN)}`);
+  if (bank.bankName) lines.push(`Banco: ${bank.bankName}`);
+  if (bank.iban) lines.push(`IBAN: ${bank.iban}`);
+  if (bank.accountNumber) lines.push(`Conta: ${bank.accountNumber}`);
   lines.push(
     "",
     "1. Abra a aplicação do seu banco (Multicaixa Express ou home-banking).",
@@ -225,11 +234,13 @@ export async function createCheckoutSession(
   }
 
   if (method === "QR_CODE") {
-    const iban = env.BILLING_BANK_IBAN;
-    // A QR only makes sense with a real, valid IBAN. Building it is wrapped in a
-    // safe helper that returns null instead of throwing, so a missing or odd
-    // secondary field degrades to bank-transfer instructions — the payer never
-    // sees a 503.
+    const bank = platformBankDetails();
+    // A QR only makes sense with a real, valid IBAN. When the configured value
+    // is blank we use the real Banco BIC default; when it is present but
+    // invalid we do NOT substitute another account — we degrade to the
+    // transfer instructions. Building is wrapped in a safe helper that returns
+    // null instead of throwing, so the payer never sees a 503.
+    const iban = bank.iban;
     if (iban) {
       const qrPayload = tryBuildAngolaBankQr({
         iban,
@@ -237,7 +248,7 @@ export async function createCheckoutSession(
         merchantCity: env.PLATFORM_CITY ?? null,
         amountCents: subject.amountCents,
         reference: subject.reference,
-        acquirerGui: env.BILLING_BANK_GUI ?? null,
+        acquirerGui: env.BILLING_BANK_GUI ?? BIC_BANK_DEFAULTS.gui,
       });
       if (qrPayload) {
         return {

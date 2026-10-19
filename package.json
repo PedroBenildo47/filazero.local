@@ -25,6 +25,8 @@
     "test:api:security": "node --conditions=react-server --import tsx tests/api/run-platform-security.ts",
     "test:integration": "cross-env NODE_OPTIONS=--conditions=react-server tsx tests/integration/phases-3-6.test.ts",
     "test:api:with-server": "bash scripts/run-api-tests.sh",
+    "test:api:tolerance": "node --conditions=react-server --import tsx tests/api/run-billing-tolerance.ts",
+    "test:api:tolerance:with-server": "bash scripts/run-billing-tolerance-tests.sh",
     "postinstall": "prisma generate"
   },
   "prisma": {

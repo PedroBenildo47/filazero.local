@@ -16,6 +16,7 @@ import {
   normalizeIban,
   parseTlv,
   tlv,
+  tryBuildAngolaBankQr,
   verifyEmvCoChecksum,
 } from "@/server/billing/qr-payment";
 
@@ -120,4 +121,46 @@ test("building a QR refuses an invalid IBAN or a missing reference", () => {
   assert.throws(() =>
     buildAngolaBankQr({ iban: IBAN, merchantName: "X", reference: "  " }),
   );
+});
+
+test("tryBuildAngolaBankQr degrades to null instead of throwing", () => {
+  // No IBAN / malformed IBAN / empty reference / bad amount → null, never a throw.
+  assert.equal(tryBuildAngolaBankQr({ iban: "", merchantName: "F", reference: "R" }), null);
+  assert.equal(tryBuildAngolaBankQr({ iban: "AO00", merchantName: "F", reference: "R" }), null);
+  assert.equal(
+    tryBuildAngolaBankQr({ iban: "PT50000201231234567890154", merchantName: "F", reference: "R" }),
+    null,
+  );
+  assert.equal(tryBuildAngolaBankQr({ iban: IBAN, merchantName: "F", reference: "  " }), null);
+  assert.equal(
+    tryBuildAngolaBankQr({ iban: IBAN, merchantName: "F", reference: "R", amountCents: -1 }),
+    null,
+  );
+});
+
+test("tryBuildAngolaBankQr still returns a valid payload when it can build one", () => {
+  const payload = tryBuildAngolaBankQr({
+    iban: IBAN,
+    merchantName: "FilaZero",
+    merchantCity: "Luanda",
+    amountCents: 2500000,
+    reference: "FZ-DEGRADE",
+  });
+  assert.ok(payload);
+  assert.equal(verifyEmvCoChecksum(payload!), true);
+  const top = Object.fromEntries(parseTlv(payload!).map((e) => [e.tag, e.value]));
+  assert.equal(top["54"], "25000.00");
+});
+
+test("a long merchant name is truncated, not rejected (tolerant validator)", () => {
+  const payload = tryBuildAngolaBankQr({
+    iban: IBAN,
+    merchantName: "FilaZero Serviços de Gestão de Filas de Angola, Limitada",
+    merchantCity: "Luanda",
+    reference: "FZ-LONGNAME",
+  });
+  assert.ok(payload);
+  const top = Object.fromEntries(parseTlv(payload!).map((e) => [e.tag, e.value]));
+  assert.equal(top["59"], "FilaZero Serviços de Gest");
+  assert.ok(top["59"]!.length <= 25);
 });

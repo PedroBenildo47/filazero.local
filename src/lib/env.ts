@@ -82,6 +82,11 @@ const envSchema = z.object({
     z.enum(["BAI", "BFA", "BIC", "BCG", "STANDARD_BANK", "SOL"]).optional(),
   ),
   /**
+   * Account holder name shown on the transfer/QR details. Falls back to the real
+   * Banco BIC default when blank.
+   */
+  BILLING_BANK_HOLDER: blankToUndefined(z.string().max(200).optional()),
+  /**
    * Acquirer GUI (bank identifier) embedded in the domestic template of the
    * EMVCo bank QR (Tag 26 sub-tag 00). Optional; the scheme may require it.
    */

@@ -13,6 +13,7 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { MarketingHeader } from "@/components/MarketingHeader";
 import { HeroCarousel } from "@/components/HeroCarousel";
+import { Reveal } from "@/components/Reveal";
 import { useSession } from "@/components/SessionProvider";
 
 interface Plan {
@@ -103,7 +104,7 @@ export default function HomePage() {
       <main className="mkt-main">
         {/* Hero */}
         <section className="mkt-hero">
-          <div className="mkt-hero-copy">
+          <Reveal variant="up" className="mkt-hero-copy">
             <span className="mkt-eyebrow">{t("landing.eyebrow")}</span>
             <h1 className="mkt-hero-title">{highlightFila(t("landing.heroTitle"))}</h1>
             <p className="mkt-hero-subtitle">{t("landing.heroSubtitle")}</p>
@@ -124,9 +125,9 @@ export default function HomePage() {
                 </div>
               ))}
             </dl>
-          </div>
+          </Reveal>
 
-          <div className="mkt-hero-visual">
+          <Reveal variant="scale" delay={140} className="mkt-hero-visual">
             <HeroCarousel
               label={t("landing.heroImageAlt")}
               slides={[
@@ -142,32 +143,38 @@ export default function HomePage() {
                 <span>{t("landing.heroCardPosition")}</span>
               </div>
             </div>
-          </div>
+          </Reveal>
         </section>
 
         {/* Como funciona */}
         <section id="como-funciona" className="mkt-section">
-          <div className="mkt-section-head">
+          <Reveal variant="up" className="mkt-section-head">
             <h2>{t("landing.howTitle")}</h2>
             <p>{t("landing.howSubtitle")}</p>
-          </div>
+          </Reveal>
           <div className="mkt-how-grid">
-            {howSteps.map((step) => (
-              <article key={step.n} className="mkt-how-card">
+            {howSteps.map((step, index) => (
+              <Reveal
+                key={step.n}
+                as="article"
+                variant="up"
+                delay={index * 90}
+                className="mkt-how-card"
+              >
                 <span className="mkt-how-index">{step.n}</span>
                 <h3>{step.title}</h3>
                 <p>{step.text}</p>
-              </article>
+              </Reveal>
             ))}
           </div>
         </section>
 
         {/* Planos */}
         <section id="planos" className="mkt-section mkt-section-alt">
-          <div className="mkt-section-head">
+          <Reveal variant="up" className="mkt-section-head">
             <h2>{t("landing.plansTitle")}</h2>
             <p>{t("landing.plansSubtitle")}</p>
-          </div>
+          </Reveal>
 
           {!plansLoaded ? (
             <p className="mkt-plans-note">{t("landing.plansLoading")}</p>
@@ -175,12 +182,15 @@ export default function HomePage() {
             <p className="mkt-plans-note">{t("landing.plansError")}</p>
           ) : (
             <div className="mkt-plans-grid">
-              {plans.map((plan) => {
+              {plans.map((plan, index) => {
                 const isFree = plan.priceCents === 0;
                 const recommended = plan.code === RECOMMENDED_CODE;
                 return (
-                  <article
+                  <Reveal
                     key={plan.id}
+                    as="article"
+                    variant="up"
+                    delay={index * 90}
                     className={`mkt-plan${recommended ? " is-recommended" : ""}`}
                   >
                     {recommended && (
@@ -213,7 +223,7 @@ export default function HomePage() {
                           ? t("landing.planPayNow")
                           : t("landing.planChoose")}
                     </Link>
-                  </article>
+                  </Reveal>
                 );
               })}
             </div>
@@ -222,13 +232,13 @@ export default function HomePage() {
 
         {/* Para empresas */}
         <section id="para-empresas" className="mkt-section mkt-business">
-          <div className="mkt-business-copy">
+          <Reveal variant="up" className="mkt-business-copy">
             <h2>{t("landing.businessTitle")}</h2>
             <p>{t("landing.businessText")}</p>
             <Link href="/registar-organizacao" className="btn btn-accent btn-lg">
               {t("landing.businessCta")} <span aria-hidden="true">→</span>
             </Link>
-          </div>
+          </Reveal>
         </section>
       </main>
     </div>

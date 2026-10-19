@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isValidCompanyNif, isValidNif } from "@/lib/nif";
-import { uuidSchema } from "@/lib/validation";
+import { angolanPhoneSchema, uuidSchema } from "@/lib/validation";
 
 export const paymentMethodSchema = z.enum([
   "MULTICAIXA_EXPRESS",
@@ -42,6 +42,11 @@ export const checkoutSchema = z.object({
   method: paymentMethodSchema.default("MULTICAIXA_EXPRESS"),
   /** NIF to print on the invoice; falls back to the organization's NIF. */
   taxId: nifSchema,
+  /**
+   * Payer's Angolan mobile number. Required for Multicaixa Express (the payment
+   * request is pushed to the phone) and optional elsewhere.
+   */
+  payerPhone: angolanPhoneSchema.optional(),
 });
 
 export const assignPlanSchema = z.object({

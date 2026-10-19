@@ -20,6 +20,7 @@ export const POST = route(async (request) => {
     body.planId,
     body.method,
     body.taxId ?? null,
+    body.payerPhone ?? null,
     getRequestMeta(request),
   );
   return created(result);

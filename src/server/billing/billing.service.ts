@@ -36,6 +36,7 @@ import {
 } from "@/server/context";
 import {
   createCheckoutSession,
+  type BankDetails,
   generatePaymentReference,
   webhookSecretFor,
 } from "./payment-provider";
@@ -113,6 +114,8 @@ export interface CheckoutResult {
   instructions: string | null;
   /** EMVCo bank QR payload the payer scans; only for QR_CODE. */
   qrPayload: string | null;
+  /** Structured platform bank account; null for card / hosted checkout. */
+  bankDetails: BankDetails | null;
   reference: string;
 }
 
@@ -122,6 +125,7 @@ export async function startCheckout(
   planId: string,
   method: PaymentMethodName,
   taxId: string | null | undefined,
+  payerPhone: string | null | undefined,
   meta: RequestMeta,
 ): Promise<CheckoutResult> {
   requirePermission(ctx, "billing:manage");
@@ -154,12 +158,13 @@ export async function startCheckout(
       currency: plan.currency,
       reference,
       customerTaxId: taxId && taxId.length > 0 ? taxId : null,
+      metadata: payerPhone ? { payerPhone } : undefined,
     },
   });
 
   let session;
   try {
-    session = await createCheckoutSession(transaction, plan, method);
+    session = await createCheckoutSession(transaction, plan, method, payerPhone);
   } catch (error) {
     await db.transaction.update({
       where: { id: transaction.id },
@@ -177,8 +182,9 @@ export async function startCheckout(
     data: {
       providerReference: session.providerReference,
       metadata:
-        session.instructions || session.qrPayload
+        session.instructions || session.qrPayload || payerPhone
           ? {
+              ...(payerPhone ? { payerPhone } : {}),
               ...(session.instructions ? { instructions: session.instructions } : {}),
               ...(session.qrPayload ? { qrPayload: session.qrPayload } : {}),
             }
@@ -201,6 +207,7 @@ export async function startCheckout(
     checkoutUrl: session.checkoutUrl,
     instructions: session.instructions,
     qrPayload: session.qrPayload,
+    bankDetails: session.bankDetails,
     reference,
   };
 }

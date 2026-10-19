@@ -27,6 +27,8 @@ export interface MulticaixaRequestInput {
   currency: string;
   description: string;
   callbackUrl: string;
+  /** Payer's normalised Angolan mobile number (`+2449XXXXXXXX`), when provided. */
+  payerPhone?: string | null;
 }
 
 function formatAmount(amountCents: number, currency: string): string {
@@ -40,12 +42,17 @@ function instructions(input: MulticaixaRequestInput): string {
     `Referência: ${input.reference}`,
     `Valor: ${formatAmount(input.amountCents, input.currency)}`,
   ];
+  if (input.payerPhone) lines.push(`Telemóvel: ${input.payerPhone}`);
   if (env.MULTICAIXA_MERCHANT_NAME) lines.push(`Entidade: ${env.MULTICAIXA_MERCHANT_NAME}`);
   if (env.MULTICAIXA_MERCHANT_PHONE) lines.push(`Telefone: ${env.MULTICAIXA_MERCHANT_PHONE}`);
   lines.push(
     "",
-    "1. Abra a aplicação Multicaixa Express.",
-    "2. Escolha “Pagamentos” e introduza a referência acima.",
+    input.payerPhone
+      ? `1. Confirme o pagamento no Multicaixa Express do número ${input.payerPhone}.`
+      : "1. Abra a aplicação Multicaixa Express.",
+    input.payerPhone
+      ? "2. Introduza a referência acima e confirme com o seu PIN."
+      : "2. Escolha “Pagamentos” e introduza a referência acima.",
     "3. Confirme o valor com o seu PIN.",
     "A subscrição é ativada automaticamente quando o pagamento for confirmado.",
   );
@@ -88,6 +95,7 @@ export async function createMulticaixaRequest(
       currency: input.currency,
       description: input.description,
       callbackUrl: input.callbackUrl,
+      ...(input.payerPhone ? { payerPhone: input.payerPhone } : {}),
     }),
   });
 

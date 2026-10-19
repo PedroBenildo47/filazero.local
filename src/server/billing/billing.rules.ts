@@ -100,6 +100,23 @@ export function normalizePaymentEvent(rawBody: string): NormalizedPaymentEvent {
     };
   }
 
+  if (rawType === "payment_intent.succeeded") {
+    const metadata = asRecord(object.metadata);
+    const reference = asString(metadata.reference);
+    if (!reference) {
+      throw AppError.badRequest("Stripe payment_intent has no reference metadata");
+    }
+    return {
+      eventId,
+      outcome: "succeeded",
+      reference,
+      providerReference: asString(object.id),
+      paidAt: new Date(),
+      provider: "STRIPE",
+      rawType,
+    };
+  }
+
   if (rawType === "payment_intent.payment_failed") {
     const metadata = asRecord(object.metadata);
     const reference = asString(metadata.reference);

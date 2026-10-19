@@ -77,6 +77,34 @@ test("normalises a Stripe checkout.session.completed event", () => {
   assert.equal(event.providerReference, "cs_test_1");
 });
 
+test("normalises a Stripe payment_intent.succeeded event (embedded card)", () => {
+  const event = normalizePaymentEvent(
+    JSON.stringify({
+      id: "evt_pi_1",
+      type: "payment_intent.succeeded",
+      data: {
+        object: { id: "pi_test_1", metadata: { reference: "FZ-CARD" } },
+      },
+    }),
+  );
+  assert.equal(event.provider, "STRIPE");
+  assert.equal(event.outcome, "succeeded");
+  assert.equal(event.reference, "FZ-CARD");
+  assert.equal(event.providerReference, "pi_test_1");
+});
+
+test("a payment_intent without a reference is rejected", () => {
+  assert.throws(() =>
+    normalizePaymentEvent(
+      JSON.stringify({
+        id: "evt_pi_2",
+        type: "payment_intent.succeeded",
+        data: { object: { id: "pi_2", metadata: {} } },
+      }),
+    ),
+  );
+});
+
 test("a Stripe session that is not paid is treated as a failure", () => {
   const event = normalizePaymentEvent(
     JSON.stringify({

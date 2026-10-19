@@ -22,6 +22,25 @@ export const phoneSchema = z
   .trim()
   .regex(/^\+?[0-9\s-]{7,20}$/, "Invalid phone number");
 
+/**
+ * Angolan mobile number, normalised to the international `+2449XXXXXXXX` form.
+ * Accepts `923 456 789`, `923456789`, `+244 923 456 789` or `00244923456789`.
+ */
+export const angolanPhoneSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/[\s().-]/g, ""))
+  .transform((value) => value.replace(/^(\+|00)?244/, "").replace(/^0+/, ""))
+  .refine((value) => /^9\d{8}$/.test(value), { message: "invalid_angolan_phone" })
+  .transform((value) => `+244${value}`);
+
+/** Formats a normalised `+2449XXXXXXXX` number as `+244 9XX XXX XXX`. */
+export function formatAngolanPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").replace(/^(00)?244/, "").replace(/^0+/, "");
+  if (digits.length !== 9) return value;
+  return `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+}
+
 export const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")

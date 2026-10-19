@@ -14,6 +14,7 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Card, Spinner, StatCard } from "@/components/ui";
+import { CardPaymentForm } from "@/components/CardPaymentForm";
 import {
   paymentMethodKey,
   statusTone,
@@ -45,6 +46,13 @@ interface CheckoutResult {
   reference: string;
 }
 
+interface CardIntent {
+  clientSecret: string;
+  publishableKey: string;
+  reference: string;
+  paymentId: string;
+}
+
 const METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "QR_CODE", "CARD"] as const;
 type Method = (typeof METHODS)[number];
 
@@ -64,6 +72,8 @@ function SubscriptionFlow() {
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [proofSent, setProofSent] = useState(false);
+  const [cardIntent, setCardIntent] = useState<CardIntent | null>(null);
+  const [cardPaid, setCardPaid] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -114,7 +124,12 @@ function SubscriptionFlow() {
     setError(null);
     setProofSent(false);
     setConfirmed(false);
+    setCardPaid(false);
     try {
+      if (method === "CARD") {
+        setCardIntent(await api<CardIntent>("/api/customer/payment-intent", { method: "POST" }));
+        return;
+      }
       setResult(
         await api<CheckoutResult>("/api/customer/checkout", {
           method: "POST",
@@ -337,16 +352,40 @@ function SubscriptionFlow() {
                 <small className="muted">{t("checkout.phoneHint")}</small>
               </div>
             ) : null}
-            <button
-              type="button"
-              className="btn btn-primary btn-lg"
-              disabled={busy || (method === "MULTICAIXA_EXPRESS" && !/^9\d{8}$/.test(phone))}
-              onClick={() => void submit()}
-            >
-              {busy
-                ? t("checkout.submitting")
-                : t("sub.payNow", { price: plan ? formatKz(plan.priceCents) : "2.000 Kz" })}
-            </button>
+            {method === "CARD" ? (
+              cardPaid ? (
+                <Alert kind="success">{t("card.paid")}</Alert>
+              ) : cardIntent ? (
+                <CardPaymentForm
+                  publishableKey={cardIntent.publishableKey}
+                  clientSecret={cardIntent.clientSecret}
+                  onSuccess={() => {
+                    setCardPaid(true);
+                    setConfirmed(true);
+                  }}
+                />
+              ) : (
+                <div className="card-panel">
+                  <div className="card-brands" aria-hidden="true">
+                    <span>VISA</span>
+                    <span>Mastercard</span>
+                  </div>
+                  <p className="muted">{t("checkout.cardIntro")}</p>
+                </div>
+              )
+            ) : null}
+            {cardIntent || cardPaid ? null : (
+              <button
+                type="button"
+                className="btn btn-primary btn-lg"
+                disabled={busy || (method === "MULTICAIXA_EXPRESS" && !/^9\d{8}$/.test(phone))}
+                onClick={() => void submit()}
+              >
+                {busy
+                  ? t("checkout.submitting")
+                  : t("sub.payNow", { price: plan ? formatKz(plan.priceCents) : "2.000 Kz" })}
+              </button>
+            )}
           </div>
         </Card>
       )}

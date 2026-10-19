@@ -36,6 +36,12 @@ interface CheckoutResult {
   checkoutUrl: string | null;
   instructions: string | null;
   qrPayload: string | null;
+  bankDetails: {
+    bankName: string | null;
+    accountNumber: string | null;
+    iban: string | null;
+    holder: string;
+  } | null;
   reference: string;
 }
 
@@ -53,6 +59,7 @@ function SubscriptionFlow() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<Method>("MULTICAIXA_EXPRESS");
+  const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -99,6 +106,10 @@ function SubscriptionFlow() {
   }, [result, confirmed]);
 
   async function submit() {
+    if (method === "MULTICAIXA_EXPRESS" && !/^9\d{8}$/.test(phone)) {
+      setError(t("checkout.phoneInvalid"));
+      return;
+    }
     setBusy(true);
     setError(null);
     setProofSent(false);
@@ -107,7 +118,10 @@ function SubscriptionFlow() {
       setResult(
         await api<CheckoutResult>("/api/customer/checkout", {
           method: "POST",
-          json: { method },
+          json: {
+            method,
+            ...(method === "MULTICAIXA_EXPRESS" ? { payerPhone: phone } : {}),
+          },
         }),
       );
     } catch (caught) {
@@ -202,6 +216,32 @@ function SubscriptionFlow() {
             <Alert kind="info">{t("checkout.pending")}</Alert>
           )}
 
+          {result.bankDetails ? (
+            <div className="bank-details">
+              <h3>{t("checkout.bankTitle")}</h3>
+              <dl>
+                <div>
+                  <dt>{t("checkout.bankName")}</dt>
+                  <dd>{result.bankDetails.bankName ?? t("checkout.notConfigured")}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.bankHolder")}</dt>
+                  <dd>{result.bankDetails.holder}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.bankIban")}</dt>
+                  <dd className="mono">
+                    {result.bankDetails.iban ?? t("checkout.notConfigured")}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("billing.reference")}</dt>
+                  <dd className="mono">{result.reference}</dd>
+                </div>
+              </dl>
+            </div>
+          ) : null}
+
           {result.instructions ? (
             <>
               <h3>{t("checkout.instructions")}</h3>
@@ -277,7 +317,32 @@ function SubscriptionFlow() {
                 ))}
               </div>
             </div>
-            <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={() => void submit()}>
+            {method === "MULTICAIXA_EXPRESS" ? (
+              <div className="field">
+                <label htmlFor="customer-phone">{t("checkout.phoneLabel")}</label>
+                <div className={`phone-input${phone && !/^9\d{8}$/.test(phone) ? " is-invalid" : ""}`}>
+                  <span className="phone-prefix">+244</span>
+                  <input
+                    id="customer-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    placeholder="923 456 789"
+                    value={phone.length > 6 ? `${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}` : phone.length > 3 ? `${phone.slice(0, 3)} ${phone.slice(3)}` : phone}
+                    onChange={(event) =>
+                      setPhone(event.target.value.replace(/\D/g, "").slice(0, 9))
+                    }
+                  />
+                </div>
+                <small className="muted">{t("checkout.phoneHint")}</small>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              disabled={busy || (method === "MULTICAIXA_EXPRESS" && !/^9\d{8}$/.test(phone))}
+              onClick={() => void submit()}
+            >
               {busy
                 ? t("checkout.submitting")
                 : t("sub.payNow", { price: plan ? formatKz(plan.priceCents) : "2.000 Kz" })}

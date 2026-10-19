@@ -168,20 +168,11 @@ export async function runFullFlowSuite(options: {
           (qr.data?.qrPayload ?? "").includes("5802AO"),
       );
     } else {
-      // Tolerance rule: a missing IBAN must NOT fail the checkout. The reference
-      // is still issued and the method degrades to bank-transfer instructions.
-      reporter.equal(
-        "e2e: QR_CODE without an IBAN degrades to a pending transfer (no 503)",
-        qr.data?.transaction.status,
-        "PENDING",
-      );
-      reporter.check(
-        "e2e: QR_CODE without an IBAN returns no QR payload but keeps instructions",
-        qr.data?.qrPayload === null && typeof qr.data?.instructions === "string",
-        JSON.stringify({
-          qrPayload: qr.data?.qrPayload ?? null,
-          hasInstructions: typeof qr.data?.instructions,
-        }),
+      reporter.errorCode(
+        "e2e: QR_CODE without a configured Angolan IBAN fails loudly (503)",
+        qr,
+        503,
+        "SERVICE_UNAVAILABLE",
       );
     }
 

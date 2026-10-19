@@ -73,6 +73,15 @@ const envSchema = z.object({
   BILLING_BANK_ACCOUNT: blankToUndefined(z.string().max(80).optional()),
   BILLING_BANK_IBAN: blankToUndefined(z.string().max(80).optional()),
   /**
+   * Angolan bank profile used as a *label* fallback when `BILLING_BANK_NAME` is
+   * blank (e.g. `BAI`, `BFA`, `BIC`). It only supplies the bank's display name —
+   * account numbers and IBANs are never defaulted, because inventing a payable
+   * destination would be unsafe.
+   */
+  BILLING_BANK_PROFILE: blankToUndefined(
+    z.enum(["BAI", "BFA", "BIC", "BCG", "STANDARD_BANK", "SOL"]).optional(),
+  ),
+  /**
    * Acquirer GUI (bank identifier) embedded in the domestic template of the
    * EMVCo bank QR (Tag 26 sub-tag 00). Optional; the scheme may require it.
    */
@@ -80,6 +89,12 @@ const envSchema = z.object({
   /** Stripe (only needed when PAYMENT_PROVIDER=stripe). */
   STRIPE_SECRET_KEY: blankToUndefined(z.string().min(10).optional()),
   STRIPE_WEBHOOK_SECRET: blankToUndefined(z.string().min(10).optional()),
+  /**
+   * Stripe publishable key, returned to the browser to mount Stripe Elements.
+   * When set together with `STRIPE_SECRET_KEY`, card payments are collected with
+   * an embedded, PCI-compliant Elements form (PaymentIntent flow).
+   */
+  STRIPE_PUBLISHABLE_KEY: blankToUndefined(z.string().min(10).optional()),
   /**
    * Multicaixa Express through an EMIS/aggregator gateway. When unset, the
    * method still issues a real, quotable reference (confirmed by the signed
@@ -193,4 +208,13 @@ export function isSmsConfigured(): boolean {
 export function isWhatsAppConfigured(): boolean {
   const env = getEnv();
   return Boolean(env.WHATSAPP_PHONE_NUMBER_ID && env.WHATSAPP_ACCESS_TOKEN);
+}
+
+/**
+ * True when card payments can be collected with an embedded Stripe Elements form
+ * (PaymentIntent flow). Requires both the secret and publishable keys.
+ */
+export function isStripeEmbeddedConfigured(): boolean {
+  const env = getEnv();
+  return Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_PUBLISHABLE_KEY);
 }

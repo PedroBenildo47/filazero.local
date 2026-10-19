@@ -47,6 +47,27 @@ export interface CheckoutSession {
   instructions: string | null;
   /** EMVCo bank QR payload the payer scans; only for QR_CODE. */
   qrPayload: string | null;
+  /** Structured platform bank account, shown on the checkout screen. */
+  bankDetails: BankDetails | null;
+}
+
+/** Platform bank account the payer transfers to (bank transfer / QR). */
+export interface BankDetails {
+  bankName: string | null;
+  accountNumber: string | null;
+  iban: string | null;
+  holder: string;
+}
+
+/** Reads the platform bank account from the environment (never hard-coded). */
+export function platformBankDetails(): BankDetails {
+  const env = getEnv();
+  return {
+    bankName: env.BILLING_BANK_NAME ?? null,
+    accountNumber: env.BILLING_BANK_ACCOUNT ?? null,
+    iban: env.BILLING_BANK_IBAN ? normalizeIban(env.BILLING_BANK_IBAN) : null,
+    holder: env.PLATFORM_LEGAL_NAME,
+  };
 }
 
 /** Unique, quotable reference printed on the invoice. */
@@ -150,6 +171,7 @@ async function createStripeCheckout(
     checkoutUrl: session.url ?? null,
     instructions: null,
     qrPayload: null,
+    bankDetails: null,
   };
 }
 
@@ -157,6 +179,7 @@ export async function createCheckoutSession(
   subject: CheckoutSubject,
   plan: CheckoutPlan,
   method: PaymentMethodName,
+  payerPhone?: string | null,
 ): Promise<CheckoutSession> {
   const env = getEnv();
 
@@ -171,6 +194,7 @@ export async function createCheckoutSession(
       currency: subject.currency,
       description: `Subscrição FilaZero — ${plan.name}`,
       callbackUrl: `${env.APP_URL}/api/billing/webhook`,
+      payerPhone: payerPhone ?? null,
     });
     return {
       provider: providerForMethod(method),
@@ -178,6 +202,7 @@ export async function createCheckoutSession(
       checkoutUrl: result.checkoutUrl,
       instructions: result.instructions,
       qrPayload: null,
+      bankDetails: null,
     };
   }
 
@@ -203,6 +228,7 @@ export async function createCheckoutSession(
       checkoutUrl: null,
       instructions: qrInstructions(subject.reference, plan),
       qrPayload,
+      bankDetails: platformBankDetails(),
     };
   }
 
@@ -213,6 +239,7 @@ export async function createCheckoutSession(
     checkoutUrl: buildCheckoutUrl(subject.reference, plan),
     instructions: bankInstructions(subject.reference, plan),
     qrPayload: null,
+    bankDetails: platformBankDetails(),
   };
 }
 

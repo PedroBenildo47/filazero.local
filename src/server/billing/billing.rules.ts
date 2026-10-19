@@ -138,17 +138,17 @@ export interface PlanDefinition {
 
 /** Prices are in the smallest currency unit (cêntimos for AOA). */
 export const PLAN_CATALOG: readonly PlanDefinition[] = [
-  { code: "trial", name: "Free", description: "Para começar sem custos. Uma filial e uma fila.",
+  { code: "trial", name: "Free", description: "Começa grátis, para sempre. Uma filial e até 5 filas.",
     priceCents: 0, currency: "AOA", interval: "MONTHLY",
     maxBranches: 1, maxQueuesPerBranch: 5, maxStaff: 5 },
   { code: "starter", name: "Essencial", description: "Para clínicas e lojas com poucas filas.",
-    priceCents: 10_000_000, currency: "AOA", interval: "MONTHLY",
+    priceCents: 2_500_000, currency: "AOA", interval: "MONTHLY",
     maxBranches: 3, maxQueuesPerBranch: 20, maxStaff: 15 },
   { code: "growth", name: "Profissional", description: "Várias filiais e equipas maiores.",
-    priceCents: 20_000_000, currency: "AOA", interval: "MONTHLY",
+    priceCents: 4_000_000, currency: "AOA", interval: "MONTHLY",
     maxBranches: 10, maxQueuesPerBranch: 40, maxStaff: 60 },
   { code: "enterprise", name: "Enterprise", description: "Rede multi-filial com necessidades próprias.",
-    priceCents: 25_000_000, currency: "AOA", interval: "MONTHLY",
+    priceCents: 5_000_000, currency: "AOA", interval: "MONTHLY",
     maxBranches: 100, maxQueuesPerBranch: 200, maxStaff: 1_000 },
 ];
 

@@ -1,17 +1,18 @@
 "use client";
 /**
- * Public checkout page (Fase 1).
+ * Angola-first checkout.
  *
- * The landing page sends visitors here after they register their company with
- * `?plan=<code>`. This page confirms the selected plan against the real
- * catalogue (`GET /api/plans`) and starts a real payment through
- * `POST /api/billing/checkout` — it never fakes a payment. The transaction only
- * becomes PAID when the provider confirms it via `POST /api/billing/webhook`.
+ * A real e-commerce style payment screen for the B2B subscription:
+ *  - order summary (plan, price, organization, period);
+ *  - payment method cards (Multicaixa Express, bank transfer, EMVCo QR, card);
+ *  - method-specific form — the Multicaixa Express phone is required and the
+ *    payment request is pushed to it;
+ *  - a payment panel with the quotable reference, the platform bank details,
+ *    the QR payload and inline proof-of-payment upload.
  *
- * Angolan payment experience: Multicaixa Express, bank transfer (IBAN) and an
- * EMVCo bank QR, each with inline proof-of-payment upload. The subscription is
- * only activated when the provider confirms the payment through the signed
- * webhook — never on the client.
+ * It never fakes a payment: the transaction is created PENDING and only the
+ * signature-verified webhook can activate the subscription. Card payments are
+ * completed on the provider's hosted, PCI-compliant page.
  */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -19,8 +20,8 @@ import { QRCodeCanvas } from "qrcode.react";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Card, Spinner, StatCard } from "@/components/ui";
-import { paymentMethodKey } from "@/lib/ui";
+import { Alert, Badge, Card, Spinner, StatCard } from "@/components/ui";
+import { paymentMethodKey, statusTone, transactionStatusKey } from "@/lib/ui";
 
 interface Plan {
   id: string;
@@ -40,6 +41,13 @@ interface Organization {
   name: string;
 }
 
+interface BankDetails {
+  bankName: string | null;
+  accountNumber: string | null;
+  iban: string | null;
+  holder: string;
+}
+
 interface CheckoutResult {
   transaction: {
     id: string;
@@ -51,6 +59,7 @@ interface CheckoutResult {
   checkoutUrl: string | null;
   instructions: string | null;
   qrPayload: string | null;
+  bankDetails: BankDetails | null;
   reference: string;
 }
 
@@ -62,6 +71,14 @@ function formatKz(cents: number): string {
   return `${kz.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Kz`;
 }
 
+/** Groups 9 local digits as `9XX XXX XXX`. */
+function formatPhoneDigits(digits: string): string {
+  const d = digits.slice(0, 9);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)} ${d.slice(3)}`;
+  return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+}
+
 function CheckoutFlow() {
   const { t, tError } = useI18n();
 
@@ -71,11 +88,13 @@ function CheckoutFlow() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<Method>("MULTICAIXA_EXPRESS");
+  const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
   const [proofSent, setProofSent] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("plan");
@@ -109,8 +128,14 @@ function CheckoutFlow() {
     [plans, planCode],
   );
 
+  const phoneValid = /^9\d{8}$/.test(phone);
+
   async function submit() {
     if (!plan || !organization) return;
+    if (method === "MULTICAIXA_EXPRESS" && !phoneValid) {
+      setError(t("checkout.phoneInvalid"));
+      return;
+    }
     setBusy(true);
     setError(null);
     setProofSent(false);
@@ -118,7 +143,12 @@ function CheckoutFlow() {
     try {
       const data = await api<CheckoutResult>("/api/billing/checkout", {
         method: "POST",
-        json: { organizationId: organization.id, planId: plan.id, method },
+        json: {
+          organizationId: organization.id,
+          planId: plan.id,
+          method,
+          ...(method === "MULTICAIXA_EXPRESS" ? { payerPhone: phone } : {}),
+        },
       });
       setResult(data);
     } catch (caught) {
@@ -126,6 +156,13 @@ function CheckoutFlow() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function copy(value: string, key: string) {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(key);
+      window.setTimeout(() => setCopied((current) => (current === key ? null : current)), 1800);
+    });
   }
 
   function downloadQr() {
@@ -156,8 +193,7 @@ function CheckoutFlow() {
     }
   }
 
-  // Poll the transaction until the signed webhook confirms it, so the payer
-  // sees the subscription activate without leaving the payment screen.
+  // Poll until the signed webhook confirms the payment.
   useEffect(() => {
     if (!result || !organization || confirmed) return;
     let active = true;
@@ -188,9 +224,12 @@ function CheckoutFlow() {
     );
   }
 
+  const intervalLabel =
+    plan?.interval === "YEARLY" ? t("checkout.perYear") : t("checkout.perMonth");
+
   return (
-    <main className="container">
-      <div className="section-head">
+    <main className="container animate-in checkout-page">
+      <div className="checkout-head">
         <span className="pill-tag">{t("billing.checkout")}</span>
         <h1 className="section-title">{t("checkout.title")}</h1>
         <p className="section-sub">{t("checkout.subtitle")}</p>
@@ -210,137 +249,304 @@ function CheckoutFlow() {
             {t("checkout.backToPlans")}
           </Link>
         </Card>
-      ) : result ? (
-        <Card title={t("checkout.summary")}>
-          <div className="kpi-grid">
-            <StatCard label={t("checkout.amount")} value={formatKz(result.transaction.amountCents)} />
-            <StatCard label={t("billing.reference")} value={result.reference} />
-            <StatCard label={t("checkout.method")} value={t(paymentMethodKey(result.transaction.method))} />
-          </div>
-
-          {confirmed ? (
-            <Alert kind="success">{t("checkout.confirmed")}</Alert>
-          ) : (
-            <Alert kind="info">{t("checkout.pending")}</Alert>
-          )}
-
-          {result.instructions ? (
-            <>
-              <h3>{t("checkout.instructions")}</h3>
-              <pre className="instructions">{result.instructions}</pre>
-            </>
-          ) : null}
-
-          {result.qrPayload ? (
-            <div className="qr-checkout">
-              <h3>{t("checkout.qrTitle")}</h3>
-              <p className="muted">{t("checkout.qrHint")}</p>
-              <QRCodeCanvas id="checkout-bank-qr" value={result.qrPayload} size={224} level="M" />
-              <div>
-                <button type="button" className="btn btn-ghost" onClick={downloadQr}>
-                  {t("checkout.qrDownload")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {result.transaction.method !== "CARD" ? (
-            <div className="stack" style={{ gap: "0.5rem" }}>
-              <h3>{t("billing.proofTitle")}</h3>
-              <p className="muted">{t("billing.proofHint")}</p>
-              {proofSent ? (
-                <Alert kind="success">{t("billing.proofSent")}</Alert>
-              ) : (
-                <label className="btn btn-ghost">
-                  {proofBusy ? t("common.loading") : t("billing.proofUpload")}
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png,image/webp"
-                    hidden
-                    disabled={proofBusy}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void submitProof(result.transaction.id, file);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-          ) : null}
-
-          <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
-            {result.checkoutUrl ? (
-              <a href={result.checkoutUrl} target="_blank" rel="noreferrer" className="btn btn-primary">
-                {t("billing.payNow")}
-              </a>
-            ) : null}
-            <Link href="/gestor" className="btn btn-ghost">
-              {t("checkout.goToPanel")}
-            </Link>
-            <button type="button" className="btn btn-ghost" onClick={() => setResult(null)}>
-              {t("checkout.newCheckout")}
-            </button>
-          </div>
-        </Card>
       ) : plan.priceCents <= 0 ? (
         <Card title={t("checkout.freePlan")}>
           <Link href="/gestor" className="btn btn-primary">
             {t("checkout.goToPanel")}
           </Link>
         </Card>
-      ) : (
-        <Card title={`${plan.name} · ${formatKz(plan.priceCents)}${t("landing.perMonth")}`}>
-          <div className="stack" style={{ gap: "0.75rem" }}>
-            <div>
-              <span className="muted">{t("checkout.organization")}: </span>
-              <strong>{organization.name}</strong>
-            </div>
-            {plan.description ? <p className="muted">{plan.description}</p> : null}
-            <p className="muted">
-              {t("landing.planLimits", {
-                branches: plan.maxBranches,
-                queues: plan.maxQueuesPerBranch,
-                staff: plan.maxStaff,
-              })}
-            </p>
+      ) : result ? (
+        /* ---------------------------------------------------------- payment */
+        <div className="checkout-layout">
+          <div className="checkout-main">
+            <Card title={t("checkout.summary")}>
+              <div className="kpi-grid">
+                <StatCard
+                  label={t("checkout.amount")}
+                  value={formatKz(result.transaction.amountCents)}
+                />
+                <StatCard label={t("billing.reference")} value={result.reference} />
+                <StatCard
+                  label={t("checkout.method")}
+                  value={t(paymentMethodKey(result.transaction.method))}
+                />
+              </div>
 
-            <div className="field">
-              <span>{t("billing.chooseMethod")}</span>
-              <div className="row method-picker">
-                {METHODS.map((option) => (
-                  <label
-                    key={option}
-                    className={`method-option${method === option ? " is-active" : ""}`}
+              {confirmed ? (
+                <Alert kind="success">{t("checkout.confirmed")}</Alert>
+              ) : (
+                <Alert kind="info">{t("checkout.pending")}</Alert>
+              )}
+
+              {result.bankDetails ? (
+                <div className="bank-details">
+                  <h3>{t("checkout.bankTitle")}</h3>
+                  <dl>
+                    <div>
+                      <dt>{t("checkout.bankName")}</dt>
+                      <dd>{result.bankDetails.bankName ?? t("checkout.notConfigured")}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("checkout.bankHolder")}</dt>
+                      <dd>{result.bankDetails.holder}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("checkout.bankIban")}</dt>
+                      <dd className="mono">{result.bankDetails.iban ?? t("checkout.notConfigured")}</dd>
+                    </div>
+                    {result.bankDetails.accountNumber ? (
+                      <div>
+                        <dt>{t("checkout.bankAccount")}</dt>
+                        <dd className="mono">{result.bankDetails.accountNumber}</dd>
+                      </div>
+                    ) : null}
+                    <div>
+                      <dt>{t("billing.reference")}</dt>
+                      <dd className="mono">{result.reference}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() =>
+                      copy(
+                        [
+                          result.bankDetails?.iban ?? "",
+                          result.reference,
+                          formatKz(result.transaction.amountCents),
+                        ]
+                          .filter(Boolean)
+                          .join(" · "),
+                        "bank",
+                      )
+                    }
                   >
-                    <input
-                      type="radio"
-                      name="method"
-                      value={option}
-                      checked={method === option}
-                      onChange={() => setMethod(option)}
-                    />
-                    {t(paymentMethodKey(option))}
-                  </label>
+                    {copied === "bank" ? t("checkout.copied") : t("checkout.copy")}
+                  </button>
+                </div>
+              ) : null}
+
+              {result.instructions ? (
+                <>
+                  <h3>{t("checkout.instructions")}</h3>
+                  <pre className="instructions">{result.instructions}</pre>
+                </>
+              ) : null}
+
+              {result.qrPayload ? (
+                <div className="qr-checkout">
+                  <h3>{t("checkout.qrTitle")}</h3>
+                  <p className="muted">{t("checkout.qrHint")}</p>
+                  <QRCodeCanvas id="checkout-bank-qr" value={result.qrPayload} size={224} level="M" />
+                  <div>
+                    <button type="button" className="btn btn-ghost" onClick={downloadQr}>
+                      {t("checkout.qrDownload")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {result.checkoutUrl ? (
+                <div className="checkout-hosted">
+                  <h3>{t("checkout.cardTitle")}</h3>
+                  <p className="muted">{t("checkout.cardSecure")}</p>
+                  <a
+                    href={result.checkoutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-accent btn-lg"
+                  >
+                    {t("billing.payNow")}
+                  </a>
+                </div>
+              ) : null}
+
+              {result.transaction.method !== "CARD" ? (
+                <div className="checkout-proof">
+                  <h3>{t("billing.proofTitle")}</h3>
+                  <p className="muted">{t("billing.proofHint")}</p>
+                  {proofSent ? (
+                    <Alert kind="success">{t("billing.proofSent")}</Alert>
+                  ) : (
+                    <label className="proof-drop">
+                      <span>{proofBusy ? t("common.loading") : t("billing.proofUpload")}</span>
+                      <small>{t("checkout.proofFormats")}</small>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png,image/webp"
+                        hidden
+                        disabled={proofBusy}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) void submitProof(result.transaction.id, file);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
+                <Link href="/gestor/subscricao" className="btn btn-ghost">
+                  {t("checkout.goToPanel")}
+                </Link>
+                <button type="button" className="btn btn-ghost" onClick={() => setResult(null)}>
+                  {t("checkout.newCheckout")}
+                </button>
+              </div>
+            </Card>
+          </div>
+
+          <aside className="checkout-aside">
+            <Card title={t("checkout.orderSummary")}>
+              <dl className="order-summary">
+                <div>
+                  <dt>{t("billing.plan")}</dt>
+                  <dd>{plan.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.organization")}</dt>
+                  <dd>{organization.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.period")}</dt>
+                  <dd>{intervalLabel}</dd>
+                </div>
+                <div className="order-total">
+                  <dt>{t("billing.amount")}</dt>
+                  <dd>{formatKz(plan.priceCents)}</dd>
+                </div>
+              </dl>
+              <div className="order-status">
+                <span className="muted">{t("billing.status")}</span>
+                <Badge tone={statusTone(confirmed ? "SUCCEEDED" : "PENDING")}>
+                  {t(transactionStatusKey(confirmed ? "SUCCEEDED" : "PENDING"))}
+                </Badge>
+              </div>
+            </Card>
+          </aside>
+        </div>
+      ) : (
+        /* ----------------------------------------------------------- method */
+        <div className="checkout-layout">
+          <div className="checkout-main">
+            <Card title={t("checkout.methodTitle")}>
+              <div className="checkout-methods" role="radiogroup" aria-label={t("billing.chooseMethod")}>
+                {METHODS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={method === option}
+                    className={`checkout-method${method === option ? " is-active" : ""}`}
+                    onClick={() => {
+                      setMethod(option);
+                      setError(null);
+                    }}
+                  >
+                    <span className="checkout-method-name">{t(paymentMethodKey(option))}</span>
+                    <span className="checkout-method-hint">{t(`checkout.hint.${option}` as const)}</span>
+                  </button>
                 ))}
               </div>
-            </div>
 
-            <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-primary btn-lg"
-                disabled={busy}
-                onClick={() => void submit()}
-              >
-                {busy ? t("checkout.submitting") : t("checkout.submit")}
-              </button>
-              <Link href="/#planos" className="btn btn-ghost">
-                {t("checkout.backToPlans")}
-              </Link>
-            </div>
+              <div className="checkout-form">
+                {method === "MULTICAIXA_EXPRESS" ? (
+                  <div className="field">
+                    <label htmlFor="payer-phone">{t("checkout.phoneLabel")}</label>
+                    <div className={`phone-input${phone && !phoneValid ? " is-invalid" : ""}`}>
+                      <span className="phone-prefix">+244</span>
+                      <input
+                        id="payer-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        placeholder="923 456 789"
+                        value={formatPhoneDigits(phone)}
+                        onChange={(event) =>
+                          setPhone(event.target.value.replace(/\D/g, "").slice(0, 9))
+                        }
+                      />
+                    </div>
+                    <small className="muted">{t("checkout.phoneHint")}</small>
+                  </div>
+                ) : null}
+
+                {method === "BANK_TRANSFER" ? (
+                  <p className="muted">{t("checkout.bankIntro")}</p>
+                ) : null}
+
+                {method === "QR_CODE" ? (
+                  <p className="muted">{t("checkout.qrIntro")}</p>
+                ) : null}
+
+                {method === "CARD" ? (
+                  <div className="card-panel">
+                    <div className="card-brands" aria-hidden="true">
+                      <span>VISA</span>
+                      <span>Mastercard</span>
+                    </div>
+                    <p className="muted">{t("checkout.cardIntro")}</p>
+                    <ul className="card-points">
+                      <li>{t("checkout.cardPoint1")}</li>
+                      <li>{t("checkout.cardPoint2")}</li>
+                      <li>{t("checkout.cardPoint3")}</li>
+                    </ul>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="btn btn-accent btn-lg btn-block"
+                  disabled={busy || (method === "MULTICAIXA_EXPRESS" && !phoneValid)}
+                  onClick={() => void submit()}
+                >
+                  {busy
+                    ? t("checkout.submitting")
+                    : method === "CARD"
+                      ? t("checkout.continueCard")
+                      : t("checkout.continue")}
+                </button>
+
+                <Link href="/#planos" className="checkout-back">
+                  {t("checkout.backToPlans")}
+                </Link>
+              </div>
+            </Card>
           </div>
-        </Card>
+
+          <aside className="checkout-aside">
+            <Card title={t("checkout.orderSummary")}>
+              <dl className="order-summary">
+                <div>
+                  <dt>{t("billing.plan")}</dt>
+                  <dd>{plan.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.organization")}</dt>
+                  <dd>{organization.name}</dd>
+                </div>
+                <div>
+                  <dt>{t("checkout.period")}</dt>
+                  <dd>{intervalLabel}</dd>
+                </div>
+                <div className="order-total">
+                  <dt>{t("billing.amount")}</dt>
+                  <dd>{formatKz(plan.priceCents)}</dd>
+                </div>
+              </dl>
+              {plan.description ? <p className="muted">{plan.description}</p> : null}
+              <p className="muted order-limits">
+                {t("landing.planLimits", {
+                  branches: plan.maxBranches,
+                  queues: plan.maxQueuesPerBranch,
+                  staff: plan.maxStaff,
+                })}
+              </p>
+            </Card>
+          </aside>
+        </div>
       )}
     </main>
   );

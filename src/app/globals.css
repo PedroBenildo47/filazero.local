@@ -4084,3 +4084,398 @@ p {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------------------------------------------------- Stripe card form */
+.card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.card-field > span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.card-element,
+.card-name-input {
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.55);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-element:focus-within,
+.card-name-input:focus {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
+  outline: none;
+}
+
+.card-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.card-name-input {
+  width: 100%;
+  color: var(--fg);
+  font: inherit;
+}
+
+.card-error {
+  margin: 0;
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+.card-secure-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* ==========================================================================
+   Hero mockup — live queue board
+   ========================================================================== */
+
+.queue-mock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  height: 100%;
+  min-height: 340px;
+  padding: 1.35rem;
+  overflow: hidden;
+}
+
+.queue-mock-glow {
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 60%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.35), transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+}
+
+.queue-mock-head,
+.queue-mock-waiting-head,
+.queue-mock-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.queue-mock-org {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.queue-mock-logo {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #06b6d4, #2563eb);
+  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.35);
+}
+
+.queue-mock-org strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #f2fbff;
+}
+
+.queue-mock-org span:last-child {
+  font-size: 0.74rem;
+  color: rgba(190, 224, 238, 0.65);
+}
+
+.queue-mock-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  background: rgba(8, 47, 73, 0.5);
+  color: #67e8f9;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.queue-mock-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.6);
+  animation: queue-pulse 1.8s ease-out infinite;
+}
+
+.queue-mock-clock {
+  font-variant-numeric: tabular-nums;
+  color: rgba(203, 232, 245, 0.75);
+  letter-spacing: 0;
+}
+
+@keyframes queue-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 211, 238, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+.queue-mock-now {
+  position: relative;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: linear-gradient(160deg, rgba(8, 47, 73, 0.6), rgba(15, 23, 42, 0.75));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.queue-mock-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(148, 196, 216, 0.8);
+  font-weight: 700;
+}
+
+.queue-mock-ticket {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+.queue-mock-ticket strong {
+  font-size: 2.6rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(120deg, #a5f3fc, #22d3ee 60%, #3b82f6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.queue-mock-counter {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.14);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  color: #a5f3fc;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.queue-mock-bar {
+  margin-top: 0.8rem;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+
+.queue-mock-bar span {
+  display: block;
+  height: 100%;
+  width: 68%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.6);
+  animation: queue-shimmer 2.6s ease-in-out infinite;
+}
+
+@keyframes queue-shimmer {
+  0%,
+  100% {
+    width: 62%;
+  }
+  50% {
+    width: 78%;
+  }
+}
+
+.queue-mock-waiting {
+  position: relative;
+  flex: 1;
+}
+
+.queue-mock-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.16);
+  color: #67e8f9;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.queue-mock-waiting ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.queue-mock-waiting li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(30, 41, 59, 0.9);
+  background: rgba(15, 23, 42, 0.55);
+  animation: queue-in 0.5s ease both;
+}
+
+@keyframes queue-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+.queue-mock-code {
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-mock-dots {
+  flex: 1;
+  height: 1px;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.25);
+}
+
+.queue-mock-wait {
+  font-size: 0.78rem;
+  color: rgba(148, 196, 216, 0.85);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-mock-foot {
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(56, 189, 248, 0.14);
+}
+
+.queue-mock-foot strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.15rem;
+  color: #a5f3fc;
+}
+
+.queue-mock-avatars {
+  display: flex;
+}
+
+.queue-mock-avatars span {
+  width: 26px;
+  height: 26px;
+  margin-left: -8px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #02131d;
+  background: linear-gradient(135deg, #67e8f9, #38bdf8);
+  border: 2px solid rgba(4, 16, 29, 0.9);
+}
+
+.queue-mock-avatars span:first-child {
+  margin-left: 0;
+}
+
+@media (max-width: 960px) {
+  .queue-mock {
+    min-height: 300px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-mock-pulse,
+  .queue-mock-bar span,
+  .queue-mock-waiting li {
+    animation: none !important;
+  }
+}
+
+/* --------------------------------------------------------- error states */
+.error-state {
+  max-width: 32rem;
+  margin: 3rem auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.error-state-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  box-shadow: 0 10px 26px rgba(239, 68, 68, 0.3);
+}
+
+.checkout-method.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
+.checkout-method.is-disabled:hover {
+  transform: none;
+  border-color: var(--border);
+}

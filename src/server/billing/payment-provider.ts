@@ -22,7 +22,8 @@ import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
 import { createMulticaixaRequest } from "./multicaixa";
 import { providerForMethod } from "./payment-methods";
-import { buildAngolaBankQr, isValidAngolaIban, normalizeIban } from "./qr-payment";
+import { normalizeIban, tryBuildAngolaBankQr } from "./qr-payment";
+import { resolveBankName } from "./bank-profiles";
 
 /** Minimal shape the checkout adapters need from a payable subject. */
 export interface CheckoutSubject {
@@ -62,26 +63,17 @@ export interface BankDetails {
 }
 
 /**
- * Display names for the main Angolan banks, used only as a *label* fallback when
- * `BILLING_BANK_NAME` is blank. No account number or IBAN is ever defaulted —
- * fabricating a payable destination would be unsafe and is never done.
+ * Reads the platform bank account from the environment (never hard-coded).
+ *
+ * Tolerance rule: a missing *secondary* field never crashes the checkout. Only
+ * the bank display name has a fallback (`BILLING_BANK_PROFILE`, then BIC); the
+ * IBAN/account stay exactly as configured, because inventing a payable
+ * destination would be unsafe.
  */
-export const ANGOLAN_BANK_PROFILES: Record<string, string> = {
-  BAI: "Banco Angolano de Investimentos (BAI)",
-  BFA: "Banco de Fomento Angola (BFA)",
-  BIC: "Banco BIC",
-  BCG: "Banco Caixa Geral (BCG)",
-  STANDARD_BANK: "Standard Bank Angola",
-  SOL: "Banco Sol",
-};
-
-/** Reads the platform bank account from the environment (never hard-coded). */
 export function platformBankDetails(): BankDetails {
   const env = getEnv();
-  const profile = env.BILLING_BANK_PROFILE;
   return {
-    bankName:
-      env.BILLING_BANK_NAME ?? (profile ? ANGOLAN_BANK_PROFILES[profile] ?? profile : null),
+    bankName: resolveBankName(env.BILLING_BANK_NAME, env.BILLING_BANK_PROFILE),
     accountNumber: env.BILLING_BANK_ACCOUNT ?? null,
     iban: env.BILLING_BANK_IBAN ? normalizeIban(env.BILLING_BANK_IBAN) : null,
     holder: env.PLATFORM_LEGAL_NAME,
@@ -234,12 +226,12 @@ export async function createCheckoutSession(
 
   if (method === "QR_CODE") {
     const iban = env.BILLING_BANK_IBAN;
-    // A QR only makes sense with a real, valid IBAN. When it is missing we do
-    // NOT fail the checkout: the transaction keeps its real reference and we
-    // degrade to the bank-transfer instructions (the UI shows the honest
-    // "bank details not published yet" state instead of a red error).
-    if (iban && isValidAngolaIban(iban)) {
-      const qrPayload = buildAngolaBankQr({
+    // A QR only makes sense with a real, valid IBAN. Building it is wrapped in a
+    // safe helper that returns null instead of throwing, so a missing or odd
+    // secondary field degrades to bank-transfer instructions — the payer never
+    // sees a 503.
+    if (iban) {
+      const qrPayload = tryBuildAngolaBankQr({
         iban,
         merchantName: env.BILLING_BANK_NAME ?? env.PLATFORM_LEGAL_NAME,
         merchantCity: env.PLATFORM_CITY ?? null,
@@ -247,14 +239,16 @@ export async function createCheckoutSession(
         reference: subject.reference,
         acquirerGui: env.BILLING_BANK_GUI ?? null,
       });
-      return {
-        provider: providerForMethod(method),
-        providerReference: subject.reference,
-        checkoutUrl: null,
-        instructions: qrInstructions(subject.reference, plan),
-        qrPayload,
-        bankDetails: platformBankDetails(),
-      };
+      if (qrPayload) {
+        return {
+          provider: providerForMethod(method),
+          providerReference: subject.reference,
+          checkoutUrl: null,
+          instructions: qrInstructions(subject.reference, plan),
+          qrPayload,
+          bankDetails: platformBankDetails(),
+        };
+      }
     }
 
     return {

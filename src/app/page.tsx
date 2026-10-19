@@ -1,14 +1,15 @@
 "use client";
 /**
- * Public landing page — "Futuristic Aqua Blue".
+ * Public landing page — "Clean Corporate SaaS".
  *
- * Institutional page for the product: glass marketing header, hero with the
- * neon-aqua identity, the three-step explainer, the public plan showcase fed by
- * the real API (`GET /api/plans`) and the business call to action. Nothing is
- * hard-coded or simulated — every card and every link points at something real.
+ * Light, high-contrast institutional page: a minimal header, a centred hero with
+ * the two entry paths (customer / company), the live queue mockup, the
+ * three-step explainer, the real plan catalogue (`GET /api/plans`) and the
+ * business call to action. Nothing is hard-coded or simulated.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { MarketingHeader } from "@/components/MarketingHeader";
@@ -53,6 +54,7 @@ function formatKz(cents: number): string {
 
 export default function HomePage() {
   const { t } = useI18n();
+  const router = useRouter();
   const { user } = useSession();
   // A signed-in manager already has an organization: choosing a plan must lead
   // straight to payment, never back to the registration form.
@@ -60,6 +62,7 @@ export default function HomePage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansError, setPlansError] = useState(false);
   const [plansLoaded, setPlansLoaded] = useState(false);
+  const [companyQuery, setCompanyQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -78,6 +81,12 @@ export default function HomePage() {
     };
   }, []);
 
+  function findQueue(event: React.FormEvent) {
+    event.preventDefault();
+    const query = companyQuery.trim();
+    router.push(query ? `/pesquisar?q=${encodeURIComponent(query)}` : "/pesquisar");
+  }
+
   const howSteps = [
     { n: "01", title: t("landing.how1Title"), text: t("landing.how1Text") },
     { n: "02", title: t("landing.how2Title"), text: t("landing.how2Text") },
@@ -92,31 +101,64 @@ export default function HomePage() {
 
   return (
     <div className="mkt-page">
-      {/* Decorative neon orbs (purely visual). */}
-      <div className="mkt-bg" aria-hidden="true">
-        <span className="mkt-orb is-1" />
-        <span className="mkt-orb is-2" />
-        <span className="mkt-orb is-3" />
-      </div>
-
       <MarketingHeader />
 
       <main className="mkt-main">
-        {/* Hero */}
+        {/* Hero — centred, with the two entry paths */}
         <section className="mkt-hero">
-          <Reveal variant="up" className="mkt-hero-copy">
-            <span className="mkt-eyebrow">{t("landing.eyebrow")}</span>
+          <Reveal variant="up" className="mkt-hero-center">
+            <span className="mkt-eyebrow">
+              <span className="mkt-eyebrow-dot" aria-hidden="true" />
+              {t("landing.eyebrow")}
+            </span>
             <h1 className="mkt-hero-title">{highlightFila(t("landing.heroTitle"))}</h1>
             <p className="mkt-hero-subtitle">{t("landing.heroSubtitle")}</p>
-            <div className="mkt-hero-actions">
-              <Link href="/login" className="btn btn-accent btn-lg">
-                {t("landing.heroPrimary")} <span aria-hidden="true">→</span>
-              </Link>
-              <Link href="/registar-organizacao" className="btn btn-outline-light btn-lg">
-                {t("landing.heroSecondary")}
+          </Reveal>
+
+          <Reveal variant="up" delay={120} className="mkt-paths">
+            {/* Cliente */}
+            <form className="mkt-path mkt-path-client" onSubmit={findQueue}>
+              <span className="mkt-path-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="3.2" />
+                  <path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+                </svg>
+              </span>
+              <h2>{t("landing.pathClientTitle")}</h2>
+              <p>{t("landing.pathClientText")}</p>
+              <label className="mkt-path-field">
+                <span className="sr-only">{t("landing.pathClientPlaceholder")}</span>
+                <input
+                  type="search"
+                  placeholder={t("landing.pathClientPlaceholder")}
+                  value={companyQuery}
+                  onChange={(event) => setCompanyQuery(event.target.value)}
+                />
+              </label>
+              <button type="submit" className="mkt-path-link">
+                {t("landing.pathClientCta")} <span aria-hidden="true">→</span>
+              </button>
+            </form>
+
+            {/* Empresa */}
+            <div className="mkt-path mkt-path-company">
+              <span className="mkt-path-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" />
+                  <path d="M14 10h4a2 2 0 0 1 2 2v9" />
+                  <path d="M3 21h18" />
+                  <path d="M7.5 8.5h3M7.5 12h3M7.5 15.5h3" />
+                </svg>
+              </span>
+              <h2>{t("landing.pathCompanyTitle")}</h2>
+              <p>{t("landing.pathCompanyText")}</p>
+              <Link href="/registar-organizacao" className="btn btn-block mkt-path-cta">
+                <span aria-hidden="true">→</span> {t("landing.registerCompany")}
               </Link>
             </div>
+          </Reveal>
 
+          <Reveal variant="fade" delay={200} className="mkt-hero-metrics">
             <dl className="mkt-metrics">
               {metrics.map((metric) => (
                 <div key={metric.label} className="mkt-metric">
@@ -126,8 +168,15 @@ export default function HomePage() {
               ))}
             </dl>
           </Reveal>
+        </section>
 
-          <Reveal variant="scale" delay={140} className="mkt-hero-visual">
+        {/* Produto — painel de filas em tempo real */}
+        <section className="mkt-section mkt-product">
+          <Reveal variant="up" className="mkt-section-head">
+            <h2>{t("landing.productTitle")}</h2>
+            <p>{t("landing.productSubtitle")}</p>
+          </Reveal>
+          <Reveal variant="scale" className="mkt-hero-visual mkt-product-visual">
             <QueueMockup />
           </Reveal>
         </section>

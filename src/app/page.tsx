@@ -13,7 +13,6 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { MarketingHeader } from "@/components/MarketingHeader";
-import { QueueMockup } from "@/components/QueueMockup";
 import { Reveal } from "@/components/Reveal";
 import { useSession } from "@/components/SessionProvider";
 
@@ -52,6 +51,50 @@ function formatKz(cents: number): string {
   return `${kwanza.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Kz`;
 }
 
+/** Inline feature icons (stroke-based, corporate blue). */
+const FEATURE_ICONS: Record<string, React.ReactNode> = {
+  mobile: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="2.5" width="10" height="19" rx="2.4" />
+      <path d="M11 18.5h2" />
+    </svg>
+  ),
+  realtime: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 1.8" />
+    </svg>
+  ),
+  qr: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="3.5" width="6" height="6" rx="1.4" />
+      <rect x="14.5" y="3.5" width="6" height="6" rx="1.4" />
+      <rect x="3.5" y="14.5" width="6" height="6" rx="1.4" />
+      <path d="M14.5 14.5h2.5v2.5M20.5 14.5v6M14.5 20.5h6" />
+    </svg>
+  ),
+  analytics: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20h16" />
+      <path d="M7 20v-6M12 20V8M17 20v-9" />
+    </svg>
+  ),
+  multifila: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8.5" r="2.4" />
+      <path d="M3.5 17c0-2.1 2-3.6 4.5-3.6s4.5 1.5 4.5 3.6" />
+      <circle cx="16.5" cy="9.5" r="2" />
+      <path d="M13.5 17c0-1.8 1.4-3 3-3s3 1.2 3 3" />
+    </svg>
+  ),
+  secure: (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3.2l6.5 2.4v5.3c0 4.1-2.7 7.4-6.5 8.9-3.8-1.5-6.5-4.8-6.5-8.9V5.6z" />
+      <path d="M9.3 12.2l1.9 1.9 3.5-3.7" />
+    </svg>
+  ),
+};
+
 export default function HomePage() {
   const { t } = useI18n();
   const router = useRouter();
@@ -88,15 +131,18 @@ export default function HomePage() {
   }
 
   const howSteps = [
-    { n: "01", title: t("landing.how1Title"), text: t("landing.how1Text") },
-    { n: "02", title: t("landing.how2Title"), text: t("landing.how2Text") },
-    { n: "03", title: t("landing.how3Title"), text: t("landing.how3Text") },
+    { title: t("landing.how1Title"), text: t("landing.how1Text") },
+    { title: t("landing.how2Title"), text: t("landing.how2Text") },
+    { title: t("landing.how3Title"), text: t("landing.how3Text") },
   ];
 
-  const metrics = [
-    { value: t("landing.metric1Value"), label: t("landing.metric1Label") },
-    { value: t("landing.metric2Value"), label: t("landing.metric2Label") },
-    { value: t("landing.metric3Value"), label: t("landing.metric3Label") },
+  const features = [
+    { icon: "mobile", title: t("landing.feature1Title"), text: t("landing.feature1Text") },
+    { icon: "realtime", title: t("landing.feature2Title"), text: t("landing.feature2Text") },
+    { icon: "qr", title: t("landing.feature3Title"), text: t("landing.feature3Text") },
+    { icon: "analytics", title: t("landing.feature4Title"), text: t("landing.feature4Text") },
+    { icon: "multifila", title: t("landing.feature5Title"), text: t("landing.feature5Text") },
+    { icon: "secure", title: t("landing.feature6Title"), text: t("landing.feature6Text") },
   ];
 
   return (
@@ -155,6 +201,7 @@ export default function HomePage() {
               <Link href="/registar-organizacao" className="btn btn-block mkt-path-cta">
                 <span aria-hidden="true">→</span> {t("landing.registerCompany")}
               </Link>
+              <p className="mkt-path-note">{t("landing.pathCompanyNote")}</p>
             </div>
           </Reveal>
 
@@ -181,22 +228,22 @@ export default function HomePage() {
           </Reveal>
         </section>
 
-        {/* Como funciona */}
+        {/* Como funciona? */}
         <section id="como-funciona" className="mkt-section">
           <Reveal variant="up" className="mkt-section-head">
             <h2>{t("landing.howTitle")}</h2>
             <p>{t("landing.howSubtitle")}</p>
           </Reveal>
-          <div className="mkt-how-grid">
+          <div className="mkt-steps">
             {howSteps.map((step, index) => (
               <Reveal
-                key={step.n}
+                key={step.title}
                 as="article"
                 variant="up"
                 delay={index * 90}
-                className="mkt-how-card"
+                className="mkt-step"
               >
-                <span className="mkt-how-index">{step.n}</span>
+                <span className="mkt-step-num">{index + 1}</span>
                 <h3>{step.title}</h3>
                 <p>{step.text}</p>
               </Reveal>
@@ -204,8 +251,33 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Planos */}
-        <section id="planos" className="mkt-section mkt-section-alt">
+        {/* Tudo o que precisa */}
+        <section id="funcionalidades" className="mkt-section">
+          <Reveal variant="up" className="mkt-section-head">
+            <h2>{t("landing.featuresTitle")}</h2>
+            <p>{t("landing.featuresSubtitle")}</p>
+          </Reveal>
+          <div className="mkt-features">
+            {features.map((feature, index) => (
+              <Reveal
+                key={feature.title}
+                as="article"
+                variant="up"
+                delay={index * 70}
+                className="mkt-feature"
+              >
+                <span className="mkt-feature-icon" aria-hidden="true">
+                  {FEATURE_ICONS[feature.icon]}
+                </span>
+                <h3>{feature.title}</h3>
+                <p>{feature.text}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* Planos e Preços */}
+        <section id="planos" className="mkt-section">
           <Reveal variant="up" className="mkt-section-head">
             <h2>{t("landing.plansTitle")}</h2>
             <p>{t("landing.plansSubtitle")}</p>
@@ -232,48 +304,40 @@ export default function HomePage() {
                       <span className="mkt-plan-badge">{t("landing.planRecommended")}</span>
                     )}
                     <h3>{plan.name}</h3>
+                    {plan.description && <p className="mkt-plan-desc">{plan.description}</p>}
                     <div className="mkt-plan-price">
                       {isFree ? t("landing.planFreePrice") : formatKz(plan.priceCents)}
                       {!isFree && <span>{t("landing.perMonth")}</span>}
                     </div>
-                    {plan.description && <p className="mkt-plan-desc">{plan.description}</p>}
-                    <p className="mkt-plan-limits">
-                      {t("landing.planLimits", {
-                        branches: plan.maxBranches,
-                        queues: plan.maxQueuesPerBranch,
-                        staff: plan.maxStaff,
-                      })}
-                    </p>
+
+                    <ul className="mkt-plan-features">
+                      <li className="mkt-plan-feature">
+                        {t("landing.planFeatureBranches", { count: plan.maxBranches })}
+                      </li>
+                      <li className="mkt-plan-feature">
+                        {t("landing.planFeatureQueues", { count: plan.maxQueuesPerBranch })}
+                      </li>
+                      <li className="mkt-plan-feature">
+                        {t("landing.planFeatureStaff", { count: plan.maxStaff })}
+                      </li>
+                      <li className="mkt-plan-feature">{t("landing.planFeatureQr")}</li>
+                    </ul>
+
                     <Link
                       href={
                         canCheckout
                           ? `/checkout?plan=${encodeURIComponent(plan.code)}`
                           : `/registar-organizacao?plan=${encodeURIComponent(plan.code)}`
                       }
-                      className={`btn ${recommended ? "btn-accent" : "btn-outline-light"} btn-block`}
+                      className={`btn ${recommended ? "btn-accent" : "btn-outline-light"}`}
                     >
-                      {isFree
-                        ? t("landing.planFree")
-                        : canCheckout
-                          ? t("landing.planPayNow")
-                          : t("landing.planChoose")}
+                      {isFree ? t("landing.planStartFree") : t("landing.planStartNow")}
                     </Link>
                   </Reveal>
                 );
               })}
             </div>
           )}
-        </section>
-
-        {/* Para empresas */}
-        <section id="para-empresas" className="mkt-section mkt-business">
-          <Reveal variant="up" className="mkt-business-copy">
-            <h2>{t("landing.businessTitle")}</h2>
-            <p>{t("landing.businessText")}</p>
-            <Link href="/registar-organizacao" className="btn btn-accent btn-lg">
-              {t("landing.businessCta")} <span aria-hidden="true">→</span>
-            </Link>
-          </Reveal>
         </section>
       </main>
     </div>

@@ -2193,9 +2193,8 @@ select.input {
 }
 
 /* ==========================================================================
-   Landing — "Clean Corporate SaaS"
-   Light, high-contrast, professional. Scoped to the marketing surface so the
-   in-app theme is never affected.
+   Landing — "Clean Light Corporate SaaS"
+   Light, high-contrast, sober. Scoped to the marketing surface.
    ========================================================================== */
 
 .mkt-page {
@@ -2259,7 +2258,7 @@ select.input {
   position: relative;
   max-width: 1160px;
   margin: 0 auto;
-  padding: 0.7rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -2301,6 +2300,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  margin-left: auto;
 }
 
 .mkt-menu-toggle {
@@ -2344,8 +2344,9 @@ select.input {
 .mkt-menu-toggle.is-open .mkt-menu-bars::before {
   transform: rotate(45deg);
 }
-.mkt-menu-toggle.is-open .mkt-menu-bars::after {
-  transform: translateY(-2px) rotate(-45deg);
+.mkt-login:hover {
+  color: #2563eb;
+  background: #f1f5f9;
 }
 
 /* --------------------------------------------------------------- main */
@@ -2356,6 +2357,7 @@ select.input {
   color: #0f172a;
 }
 
+/* --------------------------------------------------------------- hero */
 .mkt-hero {
   display: flex;
   flex-direction: column;
@@ -2385,8 +2387,11 @@ select.input {
   margin-right: 0.1rem;
 }
 
-.mkt-hero-copy {
-  min-width: 0;
+.mkt-hero-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 46rem;
 }
 
 .mkt-eyebrow {
@@ -2424,10 +2429,26 @@ select.input {
   margin: 0 0 1.75rem;
 }
 
-.mkt-hero-actions {
+/* --------------------------------------------------------- entry paths */
+.mkt-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 50rem;
+  text-align: left;
+}
+
+.mkt-path {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 
 .mkt-hero-visual {
@@ -2440,9 +2461,13 @@ select.input {
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
 }
 
-.hero-carousel {
-  position: absolute;
-  inset: 0;
+.mkt-path-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
 }
 .hero-slide {
   position: absolute;
@@ -2450,14 +2475,17 @@ select.input {
   opacity: 0;
   transition: opacity 1.1s ease;
 }
-.hero-slide.is-active {
-  opacity: 1;
+
+.mkt-path-company {
+  background: #3b6fd4;
+  border-color: #3b6fd4;
+  color: #ffffff;
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.22);
 }
-.hero-slide img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+
+.mkt-path-company .mkt-path-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 .hero-dots {
   position: absolute;
@@ -2647,7 +2675,7 @@ select.input {
 .mkt-section-head {
   text-align: center;
   max-width: 40rem;
-  margin: 0 auto 2.5rem;
+  margin: 0 auto 3rem;
 }
 .mkt-section-head h2 {
   font-size: clamp(1.7rem, 3vw, 2.25rem);
@@ -2658,20 +2686,24 @@ select.input {
 .mkt-section-head p {
   color: #475569;
   margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #64748b;
+  max-width: 20rem;
 }
 
-.mkt-how-grid {
+/* ------------------------------------------------------------ features */
+.mkt-features {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5rem;
   align-items: stretch;
 }
 
-.mkt-how-card {
-  position: relative;
+.mkt-feature {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  gap: 0.35rem;
   padding: 1.75rem 1.5rem;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
@@ -2691,14 +2723,13 @@ select.input {
   font-weight: 800;
   color: #2563eb;
   margin-bottom: 0.75rem;
-  font-variant-numeric: tabular-nums;
 }
 .mkt-how-card h3 {
   margin: 0 0 0.4rem;
   font-size: 1.08rem;
   color: #0f172a;
 }
-.mkt-how-card p {
+.mkt-feature p {
   margin: 0;
   color: #475569;
   font-size: 0.92rem;
@@ -2709,7 +2740,7 @@ select.input {
 .mkt-plans-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.4rem;
+  gap: 1.25rem;
   align-items: stretch;
 }
 
@@ -2722,7 +2753,7 @@ select.input {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.5rem;
   height: 100%;
   padding: 1.9rem 1.5rem;
   border-radius: 16px;
@@ -2744,9 +2775,10 @@ select.input {
 
 .mkt-plan-badge {
   position: absolute;
-  top: -0.75rem;
-  left: 1.4rem;
-  padding: 0.25rem 0.7rem;
+  top: -0.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
   border-radius: 999px;
   background: #2563eb;
   color: #ffffff;
@@ -2761,13 +2793,13 @@ select.input {
   color: #0f172a;
 }
 .mkt-plan-price {
-  font-size: 1.7rem;
+  font-size: 1.85rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #0f172a;
 }
 .mkt-plan-price span {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 500;
   color: #64748b;
 }
@@ -2796,8 +2828,13 @@ select.input {
   padding: 3.5rem 2.5rem;
   color: #ffffff;
 }
-.mkt-business-copy {
-  max-width: 38rem;
+
+.mkt-plan-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  color: #475569;
 }
 .mkt-business h2 {
   font-size: clamp(1.7rem, 3vw, 2.35rem);
@@ -2830,11 +2867,9 @@ select.input {
   padding: 1.25rem 0 0;
   border-top: 1px solid #e2e8f0;
 }
-
-.mkt-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+.footer-landing .footer-brand p,
+.footer-landing .footer-contact-email {
+  color: #94a3b8;
 }
 
 .mkt-metric dt {
@@ -2892,43 +2927,27 @@ select.input {
   .mkt-plans-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .mkt-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 960px) {
   .mkt-hero {
     gap: 2.25rem;
-    padding: 3.25rem 0 2.5rem;
   }
-  .mkt-hero-visual {
-    min-height: 300px;
-  }
-  .mkt-how-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .mkt-section-alt {
-    padding: 3rem 1.75rem;
+  .mkt-step p {
+    max-width: 28rem;
   }
 }
 
 @media (max-width: 720px) {
   .mkt-header-inner {
     padding: 0.65rem 1rem;
-    gap: 0.75rem;
-  }
-  .mkt-links {
-    display: none;
-  }
-  .mkt-menu-toggle {
-    display: inline-flex;
-    order: 3;
-  }
-  .mkt-actions {
-    margin-left: auto;
-    order: 2;
-    gap: 0.5rem;
+    gap: 0.6rem;
   }
   .mkt-actions .btn {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.8rem;
     font-size: 0.85rem;
   }
   .mkt-actions .btn-secondary-mobile {
@@ -2958,6 +2977,10 @@ select.input {
 
   .mkt-main {
     padding: 0 1rem 3.5rem;
+  }
+  .mkt-hero {
+    padding: 3rem 0 2.5rem;
+    gap: 2rem;
   }
   .mkt-hero-title {
     font-size: clamp(2rem, 9vw, 2.6rem);
@@ -2989,7 +3012,7 @@ select.input {
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 480px) {
   .mkt-hero-title {
     font-size: clamp(1.85rem, 10vw, 2.2rem);
   }

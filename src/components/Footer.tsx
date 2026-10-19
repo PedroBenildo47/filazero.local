@@ -1,11 +1,16 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useI18n } from "@/components/LanguageProvider";
 
 const SUPPORT_EMAIL = "suporte@filazero.ao";
 
 export function Footer() {
   const { t } = useI18n();
+  const pathname = usePathname();
+  // The public landing always renders light, so its footer uses the light
+  // corporate palette regardless of the in-app theme.
+  const isLanding = pathname === "/";
 
   const platformLinks = [
     { label: t("footer.mobileApps"), href: "/informacao/aplicativos" },
@@ -20,7 +25,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="footer">
+    <footer className={`footer${isLanding ? " footer-landing" : ""}`}>
       <div className="footer-inner">
         <div className="footer-brand">
           <Link href="/" className="footer-name">FilaZero</Link>

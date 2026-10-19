@@ -1,11 +1,11 @@
 "use client";
 /**
- * Public landing page.
+ * Public landing page — "Futuristic Aqua Blue".
  *
- * Institutional page for the product: fixed marketing header, hero, "how it
- * works", the public plan showcase and the business call to action. Every link
- * points at a page that really exists and the plan cards are fed by the real
- * public API (`GET /api/plans`) — nothing is hard-coded or simulated.
+ * Institutional page for the product: glass marketing header, hero with the
+ * neon-aqua identity, the three-step explainer, the public plan showcase fed by
+ * the real API (`GET /api/plans`) and the business call to action. Nothing is
+ * hard-coded or simulated — every card and every link points at something real.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -44,7 +44,7 @@ function highlightFila(text: string) {
   );
 }
 
-/** Formats a price given in cents as Angolan Kwanzas, e.g. `100.000 Kz`. */
+/** Formats a price given in cents as Angolan Kwanzas, e.g. `25.000 Kz`. */
 function formatKz(cents: number): string {
   const kwanza = Math.round(cents / 100);
   return `${kwanza.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Kz`;
@@ -83,8 +83,21 @@ export default function HomePage() {
     { n: "03", title: t("landing.how3Title"), text: t("landing.how3Text") },
   ];
 
+  const metrics = [
+    { value: t("landing.metric1Value"), label: t("landing.metric1Label") },
+    { value: t("landing.metric2Value"), label: t("landing.metric2Label") },
+    { value: t("landing.metric3Value"), label: t("landing.metric3Label") },
+  ];
+
   return (
-    <>
+    <div className="mkt-page">
+      {/* Decorative neon orbs (purely visual). */}
+      <div className="mkt-bg" aria-hidden="true">
+        <span className="mkt-orb is-1" />
+        <span className="mkt-orb is-2" />
+        <span className="mkt-orb is-3" />
+      </div>
+
       <MarketingHeader />
 
       <main className="mkt-main">
@@ -102,6 +115,15 @@ export default function HomePage() {
                 {t("landing.heroSecondary")}
               </Link>
             </div>
+
+            <dl className="mkt-metrics">
+              {metrics.map((metric) => (
+                <div key={metric.label} className="mkt-metric">
+                  <dt>{metric.value}</dt>
+                  <dd>{metric.label}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
           <div className="mkt-hero-visual">
@@ -209,6 +231,6 @@ export default function HomePage() {
           </div>
         </section>
       </main>
-    </>
+    </div>
   );
 }

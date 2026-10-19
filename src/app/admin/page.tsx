@@ -7,41 +7,14 @@ import type { MessageKey } from "@/lib/i18n";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Card, EmptyState, Spinner, StatCard } from "@/components/ui";
 import {
-  formatMoney,
   organizationStatusKey,
   planNameKey,
   statusTone,
-  subscriptionStatusKey,
 } from "@/lib/ui";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
-
-interface PlatformFinance {
-  currency: string;
-  period: { months: number; from: string; to: string };
-  totals: {
-    revenueCents: number;
-    paidTransactions: number;
-    mrrCents: number;
-    activeSubscriptions: number;
-    pendingCents: number;
-    pendingTransactions: number;
-  };
-  revenueByPlan: {
-    planId: string;
-    code: string;
-    name: string;
-    currency: string;
-    revenueCents: number;
-    transactions: number;
-  }[];
-  subscriptionsByStatus: { status: string; count: number }[];
-  organizations: { total: number; active: number; suspended: number; inactive: number };
-  users: { total: number; active: number };
-  monthlyRevenue: { month: string; revenueCents: number; transactions: number }[];
-}
 
 interface AdminOrganization {
   id: string;
@@ -72,12 +45,6 @@ interface OrganizationListResponse {
   total: number;
   page: number;
   pageSize: number;
-}
-
-interface PlanOption {
-  id: string;
-  code: string;
-  name: string;
 }
 
 interface AuditEntry {
@@ -169,7 +136,7 @@ interface SystemHealth {
   }[];
 }
 
-type Tab = "overview" | "finance" | "organizations" | "audit" | "health";
+type Tab = "overview" | "organizations" | "audit" | "health";
 
 const SEVERITY_TONE: Record<PlatformAlert["severity"], "danger" | "warn" | "info"> = {
   high: "danger",
@@ -220,9 +187,7 @@ function AdminDashboard() {
   const { t, tError, formatDateTime } = useI18n();
 
   const [tab, setTab] = useState<Tab>("overview");
-  const [finance, setFinance] = useState<PlatformFinance | null>(null);
   const [organizations, setOrganizations] = useState<OrganizationListResponse | null>(null);
-  const [plans, setPlans] = useState<PlanOption[]>([]);
   const [audit, setAudit] = useState<AuditListResponse | null>(null);
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [alerts, setAlerts] = useState<PlatformAlert[]>([]);
@@ -234,7 +199,7 @@ function AdminDashboard() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // Organization filters.
-  const [orgQuery, setOrgQuery] = useState({ q: "", status: "", planCode: "" });
+  const [orgQuery, setOrgQuery] = useState({ q: "", status: "" });
   const [auditQuery, setAuditQuery] = useState({ action: "", entityType: "" });
 
   // Delete confirmation modal.
@@ -242,16 +207,11 @@ function AdminDashboard() {
   const [deleteName, setDeleteName] = useState("");
   const [forceDelete, setForceDelete] = useState(false);
 
-  const loadFinance = useCallback(async () => {
-    setFinance(await api<PlatformFinance>("/api/admin/finance?months=12"));
-  }, []);
-
   const loadOrganizations = useCallback(
-    async (filters: { q: string; status: string; planCode: string }) => {
+    async (filters: { q: string; status: string }) => {
       const params = new URLSearchParams({ pageSize: "100" });
       if (filters.q.trim()) params.set("q", filters.q.trim());
       if (filters.status) params.set("status", filters.status);
-      if (filters.planCode) params.set("planCode", filters.planCode);
       setOrganizations(
         await api<OrganizationListResponse>(`/api/admin/organizations?${params.toString()}`),
       );
@@ -284,19 +244,14 @@ function AdminDashboard() {
     let active = true;
     (async () => {
       try {
-        const [financeData, orgData, planData, overviewData, alertData, healthData] =
-          await Promise.all([
-            api<PlatformFinance>("/api/admin/finance?months=12"),
-            api<OrganizationListResponse>("/api/admin/organizations?pageSize=100"),
-            api<{ items: PlanOption[] }>("/api/plans"),
-            api<PlatformOverview>("/api/admin/overview"),
-            api<PlatformAlert[]>("/api/admin/alerts"),
-            api<SystemHealth>("/api/admin/health"),
-          ]);
+        const [orgData, overviewData, alertData, healthData] = await Promise.all([
+          api<OrganizationListResponse>("/api/admin/organizations?pageSize=100"),
+          api<PlatformOverview>("/api/admin/overview"),
+          api<PlatformAlert[]>("/api/admin/alerts"),
+          api<SystemHealth>("/api/admin/health"),
+        ]);
         if (!active) return;
-        setFinance(financeData);
         setOrganizations(orgData);
-        setPlans(planData.items);
         setOverview(overviewData);
         setAlerts(alertData);
         setHealth(healthData);
@@ -346,10 +301,7 @@ function AdminDashboard() {
         method: "PATCH",
         json: { status },
       });
-      await Promise.all([
-        loadOrganizations(orgQuery),
-        loadFinance(),
-      ]);
+      await loadOrganizations(orgQuery);
     }, t("admin.statusChanged"));
   }
 
@@ -367,7 +319,7 @@ function AdminDashboard() {
       setDeleting(null);
       setDeleteName("");
       setForceDelete(false);
-      await Promise.all([loadOrganizations(orgQuery), loadFinance()]);
+      await loadOrganizations(orgQuery);
     }, t("admin.deleteSuccess"));
   }
 
@@ -397,7 +349,6 @@ function AdminDashboard() {
             onClick={() =>
               void run(async () => {
                 await Promise.all([
-                  loadFinance(),
                   loadOrganizations(orgQuery),
                   loadAudit(auditQuery),
                   loadMonitoring(),
@@ -414,7 +365,7 @@ function AdminDashboard() {
       {notice && <Alert kind="success">{notice}</Alert>}
 
       <div className="tabs" role="tablist">
-        {(["overview", "finance", "organizations", "audit", "health"] as const).map((value) => (
+        {(["overview", "organizations", "audit", "health"] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -517,139 +468,6 @@ function AdminDashboard() {
       )}
 
       {/* ---------------------------------------------------------------- */}
-      {/* Finance                                                           */}
-      {/* ---------------------------------------------------------------- */}
-      {tab === "finance" && (
-        <section className="stack">
-          <p className="muted">{t("admin.finance.subtitle")}</p>
-          {!finance ? (
-            <Spinner label={t("common.loading")} />
-          ) : (
-            <>
-              <div className="kpi-grid">
-                <StatCard
-                  label={t("admin.revenueTotal")}
-                  value={formatMoney(finance.totals.revenueCents, finance.currency)}
-                  hint={t("admin.paidTransactions") + `: ${finance.totals.paidTransactions}`}
-                  tone="ok"
-                />
-                <StatCard
-                  label={t("admin.mrr")}
-                  value={formatMoney(finance.totals.mrrCents, finance.currency)}
-                  hint={t("admin.activeSubscriptions") + `: ${finance.totals.activeSubscriptions}`}
-                  tone="info"
-                />
-                <StatCard
-                  label={t("admin.pendingAmount")}
-                  value={formatMoney(finance.totals.pendingCents, finance.currency)}
-                  hint={t("admin.pendingTransactions") + `: ${finance.totals.pendingTransactions}`}
-                  tone="warn"
-                />
-                <StatCard
-                  label={t("admin.organizations")}
-                  value={finance.organizations.total}
-                  hint={`${t("admin.orgStatus.ACTIVE")}: ${finance.organizations.active} · ${t(
-                    "admin.orgStatus.SUSPENDED",
-                  )}: ${finance.organizations.suspended} · ${t("admin.orgStatus.INACTIVE")}: ${
-                    finance.organizations.inactive
-                  }`}
-                  tone="info"
-                />
-                <StatCard
-                  label={t("admin.usersTotal")}
-                  value={finance.users.total}
-                  hint={`${t("admin.usersActive")}: ${finance.users.active}`}
-                  tone="info"
-                />
-              </div>
-
-              <Card title={t("admin.revenueByPlan")}>
-                {finance.revenueByPlan.length === 0 ? (
-                  <EmptyState>{t("admin.noData")}</EmptyState>
-                ) : (
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>{t("admin.table.plan")}</th>
-                        <th>{t("admin.revenue")}</th>
-                        <th>{t("admin.transactionsCount")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {finance.revenueByPlan.map((row) => (
-                        <tr key={row.planId}>
-                          <td>
-                            <strong>{planLabel(row)}</strong>{" "}
-                            <span className="muted mono">{row.code}</span>
-                          </td>
-                          <td>{formatMoney(row.revenueCents, row.currency)}</td>
-                          <td className="muted">{row.transactions}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </Card>
-
-              <div className="row" style={{ alignItems: "flex-start", gap: "1rem" }}>
-                <Card title={t("admin.monthlyRevenue")}>
-                  {finance.monthlyRevenue.length === 0 ? (
-                    <EmptyState>{t("admin.noData")}</EmptyState>
-                  ) : (
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>{t("admin.month")}</th>
-                          <th>{t("admin.revenue")}</th>
-                          <th>{t("admin.transactionsCount")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {finance.monthlyRevenue.map((row) => (
-                          <tr key={row.month}>
-                            <td className="mono">{row.month}</td>
-                            <td>{formatMoney(row.revenueCents, finance.currency)}</td>
-                            <td className="muted">{row.transactions}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-
-                <Card title={t("admin.subscriptionsByStatus")}>
-                  {finance.subscriptionsByStatus.length === 0 ? (
-                    <EmptyState>{t("admin.noData")}</EmptyState>
-                  ) : (
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>{t("billing.status")}</th>
-                          <th>{t("admin.organizations")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {finance.subscriptionsByStatus.map((row) => (
-                          <tr key={row.status}>
-                            <td>
-                              <Badge tone={statusTone(row.status)}>
-                                {t(subscriptionStatusKey(row.status))}
-                              </Badge>
-                            </td>
-                            <td>{row.count}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-
-      {/* ---------------------------------------------------------------- */}
       {/* Organizations                                                     */}
       {/* ---------------------------------------------------------------- */}
       {tab === "organizations" && (
@@ -678,18 +496,6 @@ function AdminDashboard() {
               <option value="ACTIVE">{t("admin.orgStatus.ACTIVE")}</option>
               <option value="SUSPENDED">{t("admin.orgStatus.SUSPENDED")}</option>
               <option value="INACTIVE">{t("admin.orgStatus.INACTIVE")}</option>
-            </select>
-            <select
-              className="input"
-              value={orgQuery.planCode}
-              onChange={(event) => setOrgQuery({ ...orgQuery, planCode: event.target.value })}
-            >
-              <option value="">{t("admin.allPlans")}</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.code}>
-                  {planLabel(plan)}
-                </option>
-              ))}
             </select>
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {t("common.search")}

@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  angolanPhoneSchema,
   emailSchema,
+  formatAngolanPhone,
   paginationSchema,
   paginationToSkipTake,
   passwordSchema,
@@ -43,6 +45,22 @@ test("phone schema accepts Angolan-style numbers and rejects junk", () => {
   assert.equal(phoneSchema.safeParse("+244 923 456 789").success, true);
   assert.equal(phoneSchema.safeParse("923456789").success, true);
   assert.equal(phoneSchema.safeParse("abc").success, false);
+});
+
+test("angolanPhoneSchema normalises every common local format to +2449XXXXXXXX", () => {
+  for (const input of ["923456789", "923 456 789", "+244 923 456 789", "00244923456789"]) {
+    const parsed = angolanPhoneSchema.safeParse(input);
+    assert.equal(parsed.success, true, `should accept ${input}`);
+    assert.equal(parsed.success && parsed.data, "+244923456789");
+  }
+  assert.equal(angolanPhoneSchema.safeParse("823456789").success, false);
+  assert.equal(angolanPhoneSchema.safeParse("92345678").success, false);
+  assert.equal(angolanPhoneSchema.safeParse("abc").success, false);
+});
+
+test("formatAngolanPhone renders the +244 9XX XXX XXX layout", () => {
+  assert.equal(formatAngolanPhone("+244923456789"), "+244 923 456 789");
+  assert.equal(formatAngolanPhone("923456789"), "+244 923 456 789");
 });
 
 test("uuid schema rejects non-uuid ids", () => {

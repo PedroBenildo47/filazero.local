@@ -24,6 +24,7 @@ import {
 } from "@/server/billing/billing.rules";
 import {
   createCheckoutSession,
+  type BankDetails,
   generatePaymentReference,
 } from "@/server/billing/payment-provider";
 import { providerForMethod } from "@/server/billing/payment-methods";
@@ -161,12 +162,14 @@ export interface CustomerCheckoutResult {
   checkoutUrl: string | null;
   instructions: string | null;
   qrPayload: string | null;
+  bankDetails: BankDetails | null;
   reference: string;
 }
 
 export async function startCustomerCheckout(
   ctx: AuthContext,
   method: PaymentMethodName,
+  payerPhone: string | null | undefined,
   meta: RequestMeta,
 ): Promise<CustomerCheckoutResult> {
   const subscription = await db.customerSubscription.findUnique({
@@ -194,6 +197,7 @@ export async function startCustomerCheckout(
       { reference, amountCents: payment.amountCents, currency: payment.currency },
       CUSTOMER_PLAN,
       method,
+      payerPhone,
     );
   } catch (error) {
     await db.customerPayment.update({
@@ -236,6 +240,7 @@ export async function startCustomerCheckout(
     checkoutUrl: session.checkoutUrl,
     instructions: session.instructions,
     qrPayload: session.qrPayload,
+    bankDetails: session.bankDetails,
     reference,
   };
 }

@@ -19,16 +19,31 @@ export function RequireAuth({
   children: React.ReactNode;
   roles?: UserRole[];
 }) {
-  const { user, loading } = useSession();
+  const { user, loading, error, refresh } = useSession();
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Only bounce to login when we positively know the visitor is signed out —
+    // never when the API is merely unreachable.
+    if (!loading && !user && !error) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [loading, user, router, pathname]);
+  }, [loading, user, error, router, pathname]);
+
+  if (error && !user) {
+    return (
+      <main className="container">
+        <div className="error-state">
+          <Alert kind="error">{error}</Alert>
+          <button type="button" className="btn btn-primary" onClick={() => void refresh()}>
+            {t("common.retry")}
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (loading || !user) {
     return (

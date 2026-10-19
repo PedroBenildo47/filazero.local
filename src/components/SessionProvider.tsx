@@ -8,6 +8,8 @@ interface SessionState {
   user: SessionUser | null;
   memberships: Membership[];
   loading: boolean;
+  /** Set when the session could not be fetched (e.g. the API is unreachable). */
+  error: string | null;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -18,21 +20,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await api<{ user: SessionUser; memberships: Membership[] }>(
         "/api/auth/session",
       );
       setUser(data.user);
       setMemberships(data.memberships);
-    } catch (error) {
-      if (error instanceof ApiError && error.isUnauthenticated) {
-        setUser(null);
-        setMemberships([]);
+      setError(null);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === "NETWORK") {
+        // The server is unreachable: keep the UI calm and let the caller retry
+        // instead of bouncing the user to the login screen.
+        setError(caught.message);
       } else {
+        // Unauthenticated (or any other API error): treat as signed out.
         setUser(null);
         setMemberships([]);
+        setError(null);
       }
     } finally {
       setLoading(false);
@@ -53,8 +61,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const value = useMemo<SessionState>(
-    () => ({ user, memberships, loading, refresh, logout }),
-    [user, memberships, loading, refresh, logout],
+    () => ({ user, memberships, loading, error, refresh, logout }),
+    [user, memberships, loading, error, refresh, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

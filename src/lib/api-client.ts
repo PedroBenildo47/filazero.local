@@ -29,23 +29,56 @@ export interface ApiRequestOptions {
   json?: unknown;
   formData?: FormData;
   signal?: AbortSignal;
+  /** Request timeout in ms. Defaults to 20s so the UI never hangs forever. */
+  timeoutMs?: number;
 }
 
+const DEFAULT_TIMEOUT_MS = 20_000;
+
+/**
+ * Browser API client.
+ *
+ * A network failure (server down, connection dropped, DNS, timeout) is turned
+ * into an `ApiError` with code `NETWORK` instead of leaking the browser's raw
+ * `TypeError: Failed to fetch` to the UI. Callers can therefore always render a
+ * friendly, localised message and a retry.
+ */
 export async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = "GET", json, formData, signal } = options;
+  const { method = "GET", json, formData, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
   if (json !== undefined && formData !== undefined) {
     throw new Error("An API request cannot send JSON and FormData together");
   }
 
-  const response = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: json === undefined ? undefined : { "Content-Type": "application/json" },
-    body: formData ?? (json === undefined ? undefined : JSON.stringify(json)),
-    signal,
-    cache: "no-store",
-  });
+  // Compose the caller's signal with a timeout so a hung request still settles.
+  // Done with an AbortController (not AbortSignal.any) for broad browser support.
+  const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  signal?.addEventListener("abort", onExternalAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      headers: json === undefined ? undefined : { "Content-Type": "application/json" },
+      body: formData ?? (json === undefined ? undefined : JSON.stringify(json)),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+  } catch (caught) {
+    // A caller-initiated abort is not a network failure; re-throw it as-is.
+    if (signal?.aborted) throw caught;
+    throw new ApiError(
+      "NETWORK",
+      "Não foi possível contactar o servidor. Verifica a tua ligação e tenta novamente.",
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onExternalAbort);
+  }
 
   let payload: unknown = null;
   try {

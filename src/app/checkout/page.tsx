@@ -21,6 +21,7 @@ import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Card, Spinner, StatCard } from "@/components/ui";
+import { CardPaymentForm } from "@/components/CardPaymentForm";
 import { paymentMethodKey, statusTone, transactionStatusKey } from "@/lib/ui";
 
 interface Plan {
@@ -63,6 +64,28 @@ interface CheckoutResult {
   reference: string;
 }
 
+interface CardIntent {
+  clientSecret: string;
+  publishableKey: string;
+  reference: string;
+  transactionId: string;
+}
+
+interface PaymentCapabilities {
+  multicaixa: boolean;
+  bankTransfer: boolean;
+  qr: boolean;
+  card: boolean;
+  bankConfigured: boolean;
+}
+
+const METHOD_CAPABILITY: Record<Method, keyof PaymentCapabilities> = {
+  MULTICAIXA_EXPRESS: "multicaixa",
+  BANK_TRANSFER: "bankTransfer",
+  QR_CODE: "qr",
+  CARD: "card",
+};
+
 const METHODS = ["MULTICAIXA_EXPRESS", "BANK_TRANSFER", "QR_CODE", "CARD"] as const;
 type Method = (typeof METHODS)[number];
 
@@ -85,6 +108,7 @@ function CheckoutFlow() {
   const [planCode, setPlanCode] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [capabilities, setCapabilities] = useState<PaymentCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<Method>("MULTICAIXA_EXPRESS");
@@ -94,6 +118,8 @@ function CheckoutFlow() {
   const [proofBusy, setProofBusy] = useState(false);
   const [proofSent, setProofSent] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [cardIntent, setCardIntent] = useState<CardIntent | null>(null);
+  const [cardPaid, setCardPaid] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,13 +131,15 @@ function CheckoutFlow() {
     let alive = true;
     (async () => {
       try {
-        const [planData, orgData] = await Promise.all([
+        const [planData, orgData, capsData] = await Promise.all([
           api<{ items: Plan[] }>("/api/plans"),
           api<{ items: Organization[] }>("/api/organizations?pageSize=50"),
+          api<PaymentCapabilities>("/api/billing/capabilities").catch(() => null),
         ]);
         if (!alive) return;
         setPlans(planData.items);
         setOrganization(orgData.items[0] ?? null);
+        setCapabilities(capsData);
       } catch (caught) {
         if (alive) setError(tError(caught));
       } finally {
@@ -130,6 +158,11 @@ function CheckoutFlow() {
 
   const phoneValid = /^9\d{8}$/.test(phone);
 
+  function methodAvailable(option: Method): boolean {
+    if (!capabilities) return true;
+    return capabilities[METHOD_CAPABILITY[option]];
+  }
+
   async function submit() {
     if (!plan || !organization) return;
     if (method === "MULTICAIXA_EXPRESS" && !phoneValid) {
@@ -140,7 +173,16 @@ function CheckoutFlow() {
     setError(null);
     setProofSent(false);
     setConfirmed(false);
+    setCardPaid(false);
     try {
+      if (method === "CARD") {
+        const intent = await api<CardIntent>("/api/billing/payment-intent", {
+          method: "POST",
+          json: { organizationId: organization.id, planId: plan.id },
+        });
+        setCardIntent(intent);
+        return;
+      }
       const data = await api<CheckoutResult>("/api/billing/checkout", {
         method: "POST",
         json: {
@@ -433,22 +475,32 @@ function CheckoutFlow() {
           <div className="checkout-main">
             <Card title={t("checkout.methodTitle")}>
               <div className="checkout-methods" role="radiogroup" aria-label={t("billing.chooseMethod")}>
-                {METHODS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={method === option}
-                    className={`checkout-method${method === option ? " is-active" : ""}`}
-                    onClick={() => {
-                      setMethod(option);
-                      setError(null);
-                    }}
-                  >
-                    <span className="checkout-method-name">{t(paymentMethodKey(option))}</span>
-                    <span className="checkout-method-hint">{t(`checkout.hint.${option}` as const)}</span>
-                  </button>
-                ))}
+                {METHODS.map((option) => {
+                  const available = methodAvailable(option);
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={method === option}
+                      disabled={!available}
+                      className={`checkout-method${method === option ? " is-active" : ""}${
+                        available ? "" : " is-disabled"
+                      }`}
+                      onClick={() => {
+                        setMethod(option);
+                        setError(null);
+                      }}
+                    >
+                      <span className="checkout-method-name">{t(paymentMethodKey(option))}</span>
+                      <span className="checkout-method-hint">
+                        {available
+                          ? t(`checkout.hint.${option}` as const)
+                          : t("checkout.methodUnavailable")}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="checkout-form">
@@ -474,7 +526,12 @@ function CheckoutFlow() {
                 ) : null}
 
                 {method === "BANK_TRANSFER" ? (
-                  <p className="muted">{t("checkout.bankIntro")}</p>
+                  <>
+                    <p className="muted">{t("checkout.bankIntro")}</p>
+                    {capabilities && !capabilities.bankConfigured ? (
+                      <Alert kind="info">{t("checkout.bankNotConfigured")}</Alert>
+                    ) : null}
+                  </>
                 ) : null}
 
                 {method === "QR_CODE" ? (
@@ -482,32 +539,53 @@ function CheckoutFlow() {
                 ) : null}
 
                 {method === "CARD" ? (
-                  <div className="card-panel">
-                    <div className="card-brands" aria-hidden="true">
-                      <span>VISA</span>
-                      <span>Mastercard</span>
+                  cardPaid ? (
+                    <Alert kind="success">{t("card.paid")}</Alert>
+                  ) : cardIntent ? (
+                    <div className="card-panel">
+                      <div className="card-brands" aria-hidden="true">
+                        <span>VISA</span>
+                        <span>Mastercard</span>
+                      </div>
+                      <CardPaymentForm
+                        publishableKey={cardIntent.publishableKey}
+                        clientSecret={cardIntent.clientSecret}
+                        onSuccess={() => {
+                          setCardPaid(true);
+                          setConfirmed(true);
+                        }}
+                      />
                     </div>
-                    <p className="muted">{t("checkout.cardIntro")}</p>
-                    <ul className="card-points">
-                      <li>{t("checkout.cardPoint1")}</li>
-                      <li>{t("checkout.cardPoint2")}</li>
-                      <li>{t("checkout.cardPoint3")}</li>
-                    </ul>
-                  </div>
+                  ) : (
+                    <div className="card-panel">
+                      <div className="card-brands" aria-hidden="true">
+                        <span>VISA</span>
+                        <span>Mastercard</span>
+                      </div>
+                      <p className="muted">{t("checkout.cardIntro")}</p>
+                      <ul className="card-points">
+                        <li>{t("checkout.cardPoint1")}</li>
+                        <li>{t("checkout.cardPoint2")}</li>
+                        <li>{t("checkout.cardPoint3")}</li>
+                      </ul>
+                    </div>
+                  )
                 ) : null}
 
-                <button
-                  type="button"
-                  className="btn btn-accent btn-lg btn-block"
-                  disabled={busy || (method === "MULTICAIXA_EXPRESS" && !phoneValid)}
-                  onClick={() => void submit()}
-                >
-                  {busy
-                    ? t("checkout.submitting")
-                    : method === "CARD"
-                      ? t("checkout.continueCard")
-                      : t("checkout.continue")}
-                </button>
+                {cardIntent || cardPaid ? null : (
+                  <button
+                    type="button"
+                    className="btn btn-accent btn-lg btn-block"
+                    disabled={busy || (method === "MULTICAIXA_EXPRESS" && !phoneValid)}
+                    onClick={() => void submit()}
+                  >
+                    {busy
+                      ? t("checkout.submitting")
+                      : method === "CARD"
+                        ? t("checkout.continueCard")
+                        : t("checkout.continue")}
+                  </button>
+                )}
 
                 <Link href="/#planos" className="checkout-back">
                   {t("checkout.backToPlans")}

@@ -57,16 +57,35 @@ export interface BankDetails {
   accountNumber: string | null;
   iban: string | null;
   holder: string;
+  /** True when an IBAN/account is actually configured for real transfers. */
+  configured: boolean;
 }
+
+/**
+ * Display names for the main Angolan banks, used only as a *label* fallback when
+ * `BILLING_BANK_NAME` is blank. No account number or IBAN is ever defaulted —
+ * fabricating a payable destination would be unsafe and is never done.
+ */
+export const ANGOLAN_BANK_PROFILES: Record<string, string> = {
+  BAI: "Banco Angolano de Investimentos (BAI)",
+  BFA: "Banco de Fomento Angola (BFA)",
+  BIC: "Banco BIC",
+  BCG: "Banco Caixa Geral (BCG)",
+  STANDARD_BANK: "Standard Bank Angola",
+  SOL: "Banco Sol",
+};
 
 /** Reads the platform bank account from the environment (never hard-coded). */
 export function platformBankDetails(): BankDetails {
   const env = getEnv();
+  const profile = env.BILLING_BANK_PROFILE;
   return {
-    bankName: env.BILLING_BANK_NAME ?? null,
+    bankName:
+      env.BILLING_BANK_NAME ?? (profile ? ANGOLAN_BANK_PROFILES[profile] ?? profile : null),
     accountNumber: env.BILLING_BANK_ACCOUNT ?? null,
     iban: env.BILLING_BANK_IBAN ? normalizeIban(env.BILLING_BANK_IBAN) : null,
     holder: env.PLATFORM_LEGAL_NAME,
+    configured: Boolean(env.BILLING_BANK_IBAN || env.BILLING_BANK_ACCOUNT),
   };
 }
 
@@ -76,17 +95,24 @@ export function generatePaymentReference(): string {
 }
 
 function bankInstructions(reference: string, plan: CheckoutPlan): string | null {
-  const env = getEnv();
+  const bank = platformBankDetails();
   const lines: string[] = [
     `Referência: ${reference}`,
     `Plano: ${plan.name} (${formatAmount(plan.priceCents, plan.currency)})`,
   ];
-  if (env.BILLING_BANK_NAME) lines.push(`Banco: ${env.BILLING_BANK_NAME}`);
-  if (env.BILLING_BANK_ACCOUNT) lines.push(`Conta: ${env.BILLING_BANK_ACCOUNT}`);
-  if (env.BILLING_BANK_IBAN) lines.push(`IBAN: ${env.BILLING_BANK_IBAN}`);
+  if (bank.bankName) lines.push(`Banco: ${bank.bankName}`);
+  if (bank.accountNumber) lines.push(`Conta: ${bank.accountNumber}`);
+  if (bank.iban) lines.push(`IBAN: ${bank.iban}`);
   if (lines.length === 2) {
-    // No bank details configured: still a real, valid reference.
+    // No bank details configured: still a real, valid reference. The payer is
+    // told to quote it so finance can match the transfer.
     lines.push("Pague por transferência e indique a referência.");
+  }
+  if (!bank.iban && !bank.accountNumber) {
+    lines.push(
+      "",
+      "Os dados bancários da plataforma ainda não estão publicados. A tua referência já é válida: guarda-a e contacta o suporte para concluir a transferência.",
+    );
   }
   return lines.join("\n");
 }
@@ -208,26 +234,35 @@ export async function createCheckoutSession(
 
   if (method === "QR_CODE") {
     const iban = env.BILLING_BANK_IBAN;
-    if (!iban || !isValidAngolaIban(iban)) {
-      throw AppError.serviceUnavailable(
-        "QR_CODE requires a valid Angolan BILLING_BANK_IBAN.",
-        { provider: "qr" },
-      );
+    // A QR only makes sense with a real, valid IBAN. When it is missing we do
+    // NOT fail the checkout: the transaction keeps its real reference and we
+    // degrade to the bank-transfer instructions (the UI shows the honest
+    // "bank details not published yet" state instead of a red error).
+    if (iban && isValidAngolaIban(iban)) {
+      const qrPayload = buildAngolaBankQr({
+        iban,
+        merchantName: env.BILLING_BANK_NAME ?? env.PLATFORM_LEGAL_NAME,
+        merchantCity: env.PLATFORM_CITY ?? null,
+        amountCents: subject.amountCents,
+        reference: subject.reference,
+        acquirerGui: env.BILLING_BANK_GUI ?? null,
+      });
+      return {
+        provider: providerForMethod(method),
+        providerReference: subject.reference,
+        checkoutUrl: null,
+        instructions: qrInstructions(subject.reference, plan),
+        qrPayload,
+        bankDetails: platformBankDetails(),
+      };
     }
-    const qrPayload = buildAngolaBankQr({
-      iban,
-      merchantName: env.BILLING_BANK_NAME ?? env.PLATFORM_LEGAL_NAME,
-      merchantCity: env.PLATFORM_CITY ?? null,
-      amountCents: subject.amountCents,
-      reference: subject.reference,
-      acquirerGui: env.BILLING_BANK_GUI ?? null,
-    });
+
     return {
       provider: providerForMethod(method),
       providerReference: subject.reference,
       checkoutUrl: null,
-      instructions: qrInstructions(subject.reference, plan),
-      qrPayload,
+      instructions: bankInstructions(subject.reference, plan),
+      qrPayload: null,
       bankDetails: platformBankDetails(),
     };
   }

@@ -42,6 +42,11 @@ import {
 } from "./payment-provider";
 import { providerForMethod } from "./payment-methods";
 import {
+  createCardPaymentIntent,
+  isCardPaymentsConfigured,
+  stripePublishableKey,
+} from "./stripe.service";
+import {
   buildInvoiceCanonical,
   invoiceQrPayload,
   previousHashOf,
@@ -210,6 +215,107 @@ export async function startCheckout(
     bankDetails: session.bankDetails,
     reference,
   };
+}
+
+export interface CardIntentResult {
+  clientSecret: string;
+  publishableKey: string;
+  reference: string;
+  transactionId: string;
+}
+
+/**
+ * Starts an embedded Stripe card payment for an organization's plan.
+ *
+ * Creates the PENDING transaction first (so the reference exists even if Stripe
+ * refuses), then a real PaymentIntent. The card is confirmed in the browser with
+ * Stripe Elements; only the signed webhook can move the transaction to
+ * SUCCEEDED.
+ */
+export async function startCardIntent(
+  ctx: AuthContext,
+  organizationId: string,
+  planId: string,
+  taxId: string | null | undefined,
+  meta: RequestMeta,
+): Promise<CardIntentResult> {
+  requirePermission(ctx, "billing:manage");
+  assertOrganizationAccess(ctx, organizationId);
+  assertManagerOfOrganization(ctx, organizationId);
+
+  if (!isCardPaymentsConfigured()) {
+    throw AppError.serviceUnavailable(
+      "Card payments are not configured on this server.",
+      { provider: "stripe", code: "CARD_NOT_CONFIGURED" },
+    );
+  }
+
+  const plan = await db.plan.findFirst({ where: { id: planId, active: true } });
+  if (!plan) throw AppError.notFound("Plan not found");
+  if (plan.priceCents <= 0) {
+    throw AppError.badRequest("This plan is free; no checkout is required.");
+  }
+
+  const subscription = await getSubscription(organizationId);
+  const reference = generatePaymentReference();
+
+  let transaction = await db.transaction.create({
+    data: {
+      organizationId,
+      subscriptionId: subscription?.id ?? null,
+      planId: plan.id,
+      provider: "STRIPE",
+      method: "CARD",
+      status: "PENDING",
+      amountCents: plan.priceCents,
+      currency: plan.currency,
+      reference,
+      customerTaxId: taxId && taxId.length > 0 ? taxId : null,
+    },
+  });
+
+  try {
+    const intent = await createCardPaymentIntent({
+      amountCents: plan.priceCents,
+      currency: plan.currency,
+      reference,
+      description: `Subscrição FilaZero — ${plan.name}`,
+      metadata: { organizationId, transactionId: transaction.id, plan: plan.code },
+      customerEmail: ctx.user.email,
+    });
+
+    transaction = await db.transaction.update({
+      where: { id: transaction.id },
+      data: { providerReference: intent.id, metadata: { reference } },
+    });
+
+    await recordAudit(db, {
+      actorUserId: ctx.user.id,
+      action: "billing.card_intent_started",
+      entityType: "transaction",
+      entityId: transaction.id,
+      metadata: { organizationId, plan: plan.code, reference },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return {
+      clientSecret: intent.clientSecret,
+      publishableKey: stripePublishableKey(),
+      reference,
+      transactionId: transaction.id,
+    };
+  } catch (error) {
+    await db.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        status: "FAILED",
+        failureReason:
+          error instanceof Error ? error.message.slice(0, 300) : "provider_error",
+      },
+    });
+    throw error;
+  }
 }
 
 export async function listTransactions(

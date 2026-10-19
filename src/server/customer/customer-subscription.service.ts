@@ -28,6 +28,11 @@ import {
   generatePaymentReference,
 } from "@/server/billing/payment-provider";
 import { providerForMethod } from "@/server/billing/payment-methods";
+import {
+  createCardPaymentIntent,
+  isCardPaymentsConfigured,
+  stripePublishableKey,
+} from "@/server/billing/stripe.service";
 
 /** The single end-customer plan: 2.000 Kz / month. */
 export const CUSTOMER_PLAN = {
@@ -243,6 +248,91 @@ export async function startCustomerCheckout(
     bankDetails: session.bankDetails,
     reference,
   };
+}
+
+export interface CustomerCardIntentResult {
+  clientSecret: string;
+  publishableKey: string;
+  reference: string;
+  paymentId: string;
+}
+
+/**
+ * Starts an embedded Stripe card payment for the end-customer subscription.
+ * Same rule as everywhere else: the card is confirmed in the browser and only
+ * the signed webhook activates the subscription.
+ */
+export async function startCustomerCardIntent(
+  ctx: AuthContext,
+  meta: RequestMeta,
+): Promise<CustomerCardIntentResult> {
+  if (!isCardPaymentsConfigured()) {
+    throw AppError.serviceUnavailable(
+      "Card payments are not configured on this server.",
+      { provider: "stripe", code: "CARD_NOT_CONFIGURED" },
+    );
+  }
+
+  const subscription = await db.customerSubscription.findUnique({
+    where: { userId: ctx.user.id },
+  });
+  const reference = generatePaymentReference();
+
+  let payment = await db.customerPayment.create({
+    data: {
+      userId: ctx.user.id,
+      subscriptionId: subscription?.id ?? null,
+      provider: "STRIPE",
+      method: "CARD",
+      status: "PENDING",
+      amountCents: CUSTOMER_PLAN.priceCents,
+      currency: CUSTOMER_PLAN.currency,
+      reference,
+    },
+  });
+
+  try {
+    const intent = await createCardPaymentIntent({
+      amountCents: CUSTOMER_PLAN.priceCents,
+      currency: CUSTOMER_PLAN.currency,
+      reference,
+      description: `Subscrição FilaZero Cliente`,
+      metadata: { userId: ctx.user.id, paymentId: payment.id },
+      customerEmail: ctx.user.email,
+    });
+
+    payment = await db.customerPayment.update({
+      where: { id: payment.id },
+      data: { providerReference: intent.id, metadata: { reference } },
+    });
+
+    await recordAudit(db, {
+      actorUserId: ctx.user.id,
+      action: "customer.card_intent_started",
+      entityType: "customer_payment",
+      entityId: payment.id,
+      metadata: { reference },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return {
+      clientSecret: intent.clientSecret,
+      publishableKey: stripePublishableKey(),
+      reference,
+      paymentId: payment.id,
+    };
+  } catch (error) {
+    await db.customerPayment.update({
+      where: { id: payment.id },
+      data: {
+        status: "FAILED",
+        failureReason:
+          error instanceof Error ? error.message.slice(0, 300) : "provider_error",
+      },
+    });
+    throw error;
+  }
 }
 
 /** True when the reference belongs to an end-customer payment. */

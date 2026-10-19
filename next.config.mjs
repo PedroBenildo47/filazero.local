@@ -16,11 +16,12 @@ const isProduction = process.env.NODE_ENV === "production";
  */
 const contentSecurityPolicy = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
+  `script-src 'self' 'unsafe-inline' https://js.stripe.com${isProduction ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: https://*.stripe.com",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://api.stripe.com https://m.stripe.network",
+  "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

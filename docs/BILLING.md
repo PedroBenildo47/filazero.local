@@ -140,7 +140,7 @@ marca a transação como paga.
 | --- | --- | --- |
 | `MULTICAIXA_EXPRESS` | `INVOICE` | Referência + instruções passo-a-passo. Com `MULTICAIXA_API_URL`/`MULTICAIXA_API_KEY` é feito um pedido real ao gateway (EMIS/agregador) e devolvido o link de pagamento |
 | `BANK_TRANSFER` | `INVOICE` | Referência + dados bancários (`BILLING_BANK_*`) para transferência |
-| `QR_CODE` | `INVOICE` | **QR bancário EMVCo** (Merchant-Presented Mode) com o IBAN, o valor e a referência; o pagador digitaliza na app do banco. Requer `BILLING_BANK_IBAN` válido (IBAN AO, mod-97); **sem IBAN o checkout não falha** — degrada para as instruções de transferência e devolve `qrPayload: null` |
+| `QR_CODE` | `INVOICE` | **QR bancário EMVCo** (Merchant-Presented Mode) com o IBAN, o valor e a referência; o pagador digitaliza na app do banco. Exige `BILLING_BANK_IBAN` válido (IBAN AO, mod-97), senão devolve **503** |
 | `CARD` | `STRIPE` | Checkout Session hospedada (Visa/Mastercard). Sem `STRIPE_SECRET_KEY` devolve **503** em vez de fingir uma página |
 
 O `provider` guarda o **transporte** (`INVOICE`/`STRIPE`) e o `method` o método

@@ -53,4 +53,11 @@ export const assignPlanSchema = z.object({
   planId: uuidSchema,
 });
 
+/** Embedded Stripe card payment (PaymentIntent) for an organization plan. */
+export const cardIntentSchema = z.object({
+  organizationId: uuidSchema,
+  planId: uuidSchema,
+  taxId: nifSchema,
+});
+
 export type CheckoutInput = z.infer<typeof checkoutSchema>;

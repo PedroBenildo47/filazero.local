@@ -15,6 +15,7 @@
 import { db } from "@/lib/db";
 import { ApiClient, type ApiResult } from "./client";
 import { runBillingSuite } from "./billing.spec";
+import { runBillingToleranceSuite } from "./billing-tolerance.spec";
 import { runB2BPaymentsSuite } from "./b2b-payments.spec";
 import { runEmailSuite } from "./email.spec";
 import { runOrganizationRegistrationSuite } from "./organization-registration.spec";
@@ -861,6 +862,7 @@ async function main() {
   /* Billing, plan limits and real email delivery (sibling suites)        */
   const reporter = { check: ok, equal: eq, errorCode: expectCode };
   await runBillingSuite({ baseUrl: BASE_URL, reporter });
+  await runBillingToleranceSuite({ baseUrl: BASE_URL, reporter });
   await runB2BPaymentsSuite({ baseUrl: BASE_URL, reporter });
   await runEmailSuite({ baseUrl: BASE_URL, reporter });
   await runOrganizationRegistrationSuite({ baseUrl: BASE_URL, reporter });

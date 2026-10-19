@@ -92,13 +92,6 @@ export default function HomePage() {
 
   return (
     <div className="mkt-page">
-      {/* Decorative neon orbs (purely visual). */}
-      <div className="mkt-bg" aria-hidden="true">
-        <span className="mkt-orb is-1" />
-        <span className="mkt-orb is-2" />
-        <span className="mkt-orb is-3" />
-      </div>
-
       <MarketingHeader />
 
       <main className="mkt-main">

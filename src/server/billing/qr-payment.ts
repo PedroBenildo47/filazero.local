@@ -244,3 +244,17 @@ export function buildAngolaBankQr(input: AngolaBankQrInput): string {
 
   return `${body}${CRC_TAG}${CRC_LENGTH}${crc16ccitt(`${body}${CRC_TAG}${CRC_LENGTH}`)}`;
 }
+
+/**
+ * Safe variant of {@link buildAngolaBankQr}: returns `null` instead of throwing
+ * when the QR cannot be built (missing/invalid IBAN, empty reference, bad
+ * amount). Callers use this to degrade to bank-transfer instructions without
+ * ever surfacing a 503 to the payer.
+ */
+export function tryBuildAngolaBankQr(input: AngolaBankQrInput): string | null {
+  try {
+    return buildAngolaBankQr(input);
+  } catch {
+    return null;
+  }
+}

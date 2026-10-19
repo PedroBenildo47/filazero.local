@@ -198,8 +198,9 @@ Um único encadeamento contínuo contra o servidor real e PostgreSQL:
 | Backoffice | atualizar NIF, substituir/remover logótipo, endpoint público e board com logótipo |
 
 O script `scripts/run-api-tests.sh` define `BILLING_BANK_IBAN`/`BILLING_BANK_GUI`
-para que o caminho QR seja realmente exercitado; sem IBAN o checkout QR devolve
-503 e a suite verifica exatamente isso.
+para que o caminho QR seja realmente exercitado; **sem IBAN o checkout QR não
+falha** — degrada para as instruções de transferência (`qrPayload: null`) e a
+suite verifica exatamente isso.
 
 ## Limitações conhecidas (honestas)
 

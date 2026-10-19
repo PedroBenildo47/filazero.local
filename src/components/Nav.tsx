@@ -59,7 +59,6 @@ export function Nav() {
               {user && link("/conta", t("nav.account"))}
               {isStaff && link("/staff", t("nav.staff"))}
               {isManager && link("/gestor", t("nav.manage"))}
-              {isManager && link("/gestor/subscricao", t("nav.billing"))}
             </>
           )}
         </div>

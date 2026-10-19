@@ -10,19 +10,14 @@ import {
   Badge,
   Card,
   EmptyState,
-  ProgressBar,
   Spinner,
   StatCard,
 } from "@/components/ui";
 import {
-  formatMoney,
   memberStatusKey,
-  paymentMethodKey,
   queueStatusKey,
   roleKey,
   statusTone,
-  subscriptionStatusKey,
-  transactionStatusKey,
 } from "@/lib/ui";
 
 interface Organization {
@@ -59,62 +54,6 @@ interface Member {
   user: { id: string; name: string; email: string };
   branch: { id: string; name: string } | null;
 }
-interface Plan {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  priceCents: number;
-  currency: string;
-  interval: string;
-  maxBranches: number;
-  maxQueuesPerBranch: number;
-  maxStaff: number;
-}
-interface Subscription {
-  id: string;
-  planId: string;
-  status: string;
-  currentPeriodEnd: string;
-  plan: Plan;
-}
-interface BillingOverview {
-  subscription: Subscription | null;
-  usage: { branches: number; queues: number; staff: number };
-  limits: { maxBranches: number; maxQueuesPerBranch: number; maxStaff: number } | null;
-  operational: boolean;
-  effectiveStatus: string | null;
-  daysRemaining: number | null;
-}
-interface Transaction {
-  id: string;
-  status: string;
-  amountCents: number;
-  currency: string;
-  reference: string;
-  provider: string;
-  method: string;
-  invoiceNumber: string | null;
-  paidAt: string | null;
-  proofSubmittedAt: string | null;
-  receiptSentAt: string | null;
-  createdAt: string;
-  failureReason: string | null;
-}
-interface Invoice {
-  id: string;
-  invoiceNumber: string | null;
-  reference: string;
-  amountCents: number;
-  currency: string;
-  method: string;
-  status: string;
-  paidAt: string | null;
-  plan: { code: string; name: string };
-  periodStart: string | null;
-  periodEnd: string | null;
-}
-
 interface Operations {
   generatedAt: string;
   totals: {
@@ -171,13 +110,9 @@ function ManagerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [billing, setBilling] = useState<BillingOverview | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [operations, setOperations] = useState<Operations | null>(null);
   const [counters, setCounters] = useState<CounterItem[]>([]);
   const [counterForm, setCounterForm] = useState({ branchId: "", name: "" });
-  const [proofBusyId, setProofBusyId] = useState<string | null>(null);
   const [queueQr, setQueueQr] = useState<{ name: string; code: string; url: string } | null>(
     null,
   );
@@ -224,30 +159,14 @@ function ManagerDashboard() {
     async (id: string) => {
       if (!id) return;
       try {
-        const [
-          branchList,
-          memberList,
-          billingData,
-          transactionList,
-          invoiceList,
-          operationsData,
-          counterList,
-        ] = await Promise.all([
+        const [branchList, memberList, operationsData, counterList] = await Promise.all([
           api<{ items: Branch[] }>(`/api/organizations/${id}/branches?pageSize=50`),
           api<{ items: Member[] }>(`/api/organizations/${id}/members?pageSize=50`),
-          api<BillingOverview>(`/api/organizations/${id}/subscription`),
-          api<{ items: Transaction[] }>(
-            `/api/organizations/${id}/transactions?pageSize=20`,
-          ),
-          api<{ items: Invoice[] }>(`/api/organizations/${id}/invoices?pageSize=20`),
           api<Operations>(`/api/organizations/${id}/operations`),
           api<{ items: CounterItem[] }>(`/api/organizations/${id}/counters`),
         ]);
         setBranches(branchList.items);
         setMembers(memberList.items);
-        setBilling(billingData);
-        setTransactions(transactionList.items);
-        setInvoices(invoiceList.items);
         setOperations(operationsData);
         setCounters(counterList.items);
         setBranchId((current) =>
@@ -261,31 +180,6 @@ function ManagerDashboard() {
     },
     [tError],
   );
-
-  async function submitProof(transactionId: string, file: File) {
-    setProofBusyId(transactionId);
-    setError(null);
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      const response = await fetch(
-        `/api/organizations/${organizationId}/transactions/${transactionId}/proof`,
-        { method: "POST", body, credentials: "include" },
-      );
-      const payload = (await response.json().catch(() => null)) as
-        | { error?: { message?: string } }
-        | null;
-      if (!response.ok) {
-        throw new Error(payload?.error?.message ?? t("errors.NETWORK"));
-      }
-      setNotice(t("billing.proofSent"));
-      await loadOrganization(organizationId);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("errors.NETWORK"));
-    } finally {
-      setProofBusyId(null);
-    }
-  }
 
   async function uploadLogo(file: File) {
     setLogoBusy(true);
@@ -330,41 +224,6 @@ function ManagerDashboard() {
       setError(tError(caught));
     } finally {
       setLogoBusy(false);
-    }
-  }
-
-  async function printInvoice(transactionId: string) {
-    try {
-      const invoice = await api<Invoice & {
-        organization: { name: string; email: string | null; city: string | null };
-      }>(`/api/organizations/${organizationId}/invoices/${transactionId}`);
-      const win = window.open("", "_blank", "width=800,height=900");
-      if (!win) return;
-      const esc = (value: string) =>
-        value.replace(/[&<>"']/g, (c) =>
-          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-        );
-      win.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8" />
-        <title>${esc(invoice.invoiceNumber ?? invoice.reference)}</title>
-        <style>body{font-family:system-ui,sans-serif;padding:40px;color:#0f172a}h1{font-size:22px}table{border-collapse:collapse;margin-top:24px;width:100%}td{padding:8px 0;border-bottom:1px solid #e2e8f0}td:last-child{text-align:right;font-weight:600}.muted{color:#64748b;font-size:13px}</style>
-        </head><body>
-        <h1>FilaZero</h1>
-        <p class="muted">Fatura ${esc(invoice.invoiceNumber ?? "—")}</p>
-        <p><strong>${esc(invoice.organization.name)}</strong><br />${esc(invoice.organization.city ?? "")}</p>
-        <table>
-          <tr><td>Plano</td><td>${esc(invoice.plan.name)}</td></tr>
-          <tr><td>Valor</td><td>${esc(formatMoney(invoice.amountCents, invoice.currency))}</td></tr>
-          <tr><td>Método</td><td>${esc(t(paymentMethodKey(invoice.method)))}</td></tr>
-          <tr><td>Referência</td><td>${esc(invoice.reference)}</td></tr>
-          <tr><td>Pago em</td><td>${esc(invoice.paidAt ? new Date(invoice.paidAt).toLocaleDateString() : "—")}</td></tr>
-          <tr><td>Válida até</td><td>${esc(invoice.periodEnd ? new Date(invoice.periodEnd).toLocaleDateString() : "—")}</td></tr>
-        </table>
-        <p class="muted" style="margin-top:32px">FilaZero — gestão de filas presenciais</p>
-        <script>window.onload=()=>window.print()</script>
-        </body></html>`);
-      win.document.close();
-    } catch (caught) {
-      setError(tError(caught));
     }
   }
 
@@ -656,193 +515,12 @@ function ManagerDashboard() {
           </Card>
 
           <Card title={t("billing.title")}>
-            {!billing ? (
-              <Spinner label={t("common.loading")} />
-            ) : (
-              <>
-                {!billing.operational && (
-                  <Alert kind="error">
-                    {t("billing.expiredWarning")} {t("billing.expiredHint")}
-                  </Alert>
-                )}
-
-                <div className="kpi-grid">
-                  <StatCard
-                    label={t("billing.currentPlan")}
-                    value={billing.subscription ? billing.subscription.plan.name : "—"}
-                    tone="info"
-                  />
-                  <StatCard
-                    label={t("billing.status")}
-                    value={
-                      <Badge tone={statusTone(billing.effectiveStatus ?? "EXPIRED")}>
-                        {t(subscriptionStatusKey(billing.effectiveStatus ?? "EXPIRED"))}
-                      </Badge>
-                    }
-                    tone={billing.operational ? "ok" : "danger"}
-                  />
-                  {billing.subscription ? (
-                    <StatCard
-                      label={t("billing.daysLeft", { days: billing.daysRemaining ?? 0 })}
-                      value={billing.daysRemaining ?? 0}
-                      hint={t("billing.renewsAt", {
-                        date: new Date(billing.subscription.currentPeriodEnd).toLocaleDateString(),
-                      })}
-                      tone={(billing.daysRemaining ?? 0) <= 3 ? "warn" : "ok"}
-                    />
-                  ) : null}
-                </div>
-
-                <h3 style={{ marginTop: "1rem" }}>{t("billing.usage")}</h3>
-                <div className="stack" style={{ gap: "0.75rem" }}>
-                  <ProgressBar
-                    label={t("billing.branches")}
-                    value={billing.usage.branches}
-                    max={billing.limits?.maxBranches ?? 0}
-                  />
-                  <ProgressBar
-                    label={t("billing.queues")}
-                    value={billing.usage.queues}
-                    max={(billing.limits?.maxQueuesPerBranch ?? 0) * Math.max(1, billing.usage.branches)}
-                  />
-                  <ProgressBar
-                    label={t("billing.staff")}
-                    value={billing.usage.staff}
-                    max={billing.limits?.maxStaff ?? 0}
-                  />
-                </div>
-
-      <div className="row billing-plans-cta">
-        <p className="muted">{t("billing.choosePlanHint")}</p>
-        <Link href="/#planos" className="btn btn-primary">
-          {t("billing.viewPlans")}
-        </Link>
-      </div>
-
-                <h3>{t("billing.history")}</h3>
-                {transactions.length === 0 ? (
-                  <EmptyState>{t("billing.noTransactions")}</EmptyState>
-                ) : (
-                  <div className="table-scroll">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>{t("billing.reference")}</th>
-                          <th>{t("billing.method")}</th>
-                          <th>{t("billing.amount")}</th>
-                          <th>{t("billing.status")}</th>
-                          <th>{t("account.joinedDate")}</th>
-                          <th>{t("common.actions")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((transaction) => {
-                          const canUploadProof =
-                            transaction.method !== "CARD" &&
-                            (transaction.status === "PENDING" ||
-                              transaction.status === "UNDER_REVIEW");
-                          return (
-                            <tr key={transaction.id}>
-                              <td className="muted">{transaction.reference}</td>
-                              <td className="muted">
-                                {t(paymentMethodKey(transaction.method))}
-                              </td>
-                              <td>
-                                {formatMoney(transaction.amountCents, transaction.currency)}
-                              </td>
-                              <td>
-                                <Badge tone={statusTone(transaction.status)}>
-                                  {t(transactionStatusKey(transaction.status))}
-                                </Badge>
-                              </td>
-                              <td className="muted">
-                                {new Date(transaction.createdAt).toLocaleDateString()}
-                              </td>
-                              <td>
-                                {canUploadProof && (
-                                  <label className="btn btn-ghost btn-sm">
-                                    {proofBusyId === transaction.id
-                                      ? t("common.loading")
-                                      : t("billing.proofUpload")}
-                                    <input
-                                      type="file"
-                                      accept="application/pdf,image/jpeg,image/png,image/webp"
-                                      hidden
-                                      disabled={proofBusyId === transaction.id}
-                                      onChange={(event) => {
-                                        const file = event.target.files?.[0];
-                                        if (file) void submitProof(transaction.id, file);
-                                        event.target.value = "";
-                                      }}
-                                    />
-                                  </label>
-                                )}
-                                {transaction.status !== "PENDING" &&
-                                  transaction.status !== "UNDER_REVIEW" &&
-                                  transaction.proofSubmittedAt && (
-                                    <span className="muted">{t("billing.proofView")}</span>
-                                  )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                <h3>{t("billing.invoices")}</h3>
-                <p className="muted">{t("billing.receiptNote")}</p>
-                {invoices.length === 0 ? (
-                  <EmptyState>{t("billing.noInvoices")}</EmptyState>
-                ) : (
-                  <div className="table-scroll">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>{t("billing.invoiceNumber")}</th>
-                          <th>{t("billing.plan")}</th>
-                          <th>{t("billing.amount")}</th>
-                          <th>{t("billing.paidAt")}</th>
-                          <th>{t("common.actions")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoices.map((invoice) => (
-                          <tr key={invoice.id}>
-                            <td className="mono">{invoice.invoiceNumber}</td>
-                            <td>{invoice.plan.name}</td>
-                            <td>{formatMoney(invoice.amountCents, invoice.currency)}</td>
-                            <td className="muted">
-                              {invoice.paidAt
-                                ? new Date(invoice.paidAt).toLocaleDateString()
-                                : "—"}
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => void printInvoice(invoice.id)}
-                              >
-                                {t("billing.viewInvoice")}
-                              </button>{" "}
-                              <a
-                                className="btn btn-ghost btn-sm"
-                                href={`/api/organizations/${organizationId}/invoices/${invoice.id}/pdf`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {t("billing.downloadPdf")}
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
+            <p className="muted">{t("billing.dedicatedHint")}</p>
+            <div className="row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
+              <Link href="/gestor/subscricao" className="btn btn-primary">
+                {t("billing.openBilling")}
+              </Link>
+            </div>
           </Card>
 
           <Card title={t("manager.branches")}>

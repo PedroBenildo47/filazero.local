@@ -55,6 +55,14 @@ const nextConfig = {
   poweredByHeader: false,
   // Hide the Next.js development indicator (the floating "N" badge) in the UI.
   devIndicators: false,
+  // Ship a tighter client bundle: tree-shake the icon/QR barrel packages and
+  // drop console noise from production builds.
+  experimental: {
+    optimizePackageImports: ["qrcode.react"],
+  },
+  compiler: {
+    removeConsole: isProduction ? { exclude: ["error", "warn"] } : false,
+  },
   // Emits `.next/standalone` with only the traced runtime dependencies, which is
   // what the production Docker image ships.
   output: "standalone",
@@ -64,6 +72,21 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // The public plan catalogue is identical for every visitor: cache it at
+        // the edge so the landing page renders instantly on repeat visits.
+        source: "/api/plans",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=60, s-maxage=300, stale-while-revalidate=600" },
+        ],
+      },
+      {
+        // Immutable marketing art.
+        source: "/marketing/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
       },
     ];
   },

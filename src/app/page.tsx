@@ -12,7 +12,7 @@ import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { useI18n } from "@/components/LanguageProvider";
 import { MarketingHeader } from "@/components/MarketingHeader";
-import { HeroCarousel } from "@/components/HeroCarousel";
+import { QueueMockup } from "@/components/QueueMockup";
 import { Reveal } from "@/components/Reveal";
 import { useSession } from "@/components/SessionProvider";
 
@@ -128,21 +128,7 @@ export default function HomePage() {
           </Reveal>
 
           <Reveal variant="scale" delay={140} className="mkt-hero-visual">
-            <HeroCarousel
-              label={t("landing.heroImageAlt")}
-              slides={[
-                { src: "/marketing/hero-waiting-room.svg", alt: t("landing.slide1Alt") },
-                { src: "/marketing/hero-reception.svg", alt: t("landing.slide2Alt") },
-                { src: "/marketing/hero-phone.svg", alt: t("landing.slide3Alt") },
-              ]}
-            />
-            <div className="mkt-float-card">
-              <span className="mkt-float-dot" aria-hidden="true" />
-              <div>
-                <strong>{t("landing.heroCardTitle")}</strong>
-                <span>{t("landing.heroCardPosition")}</span>
-              </div>
-            </div>
+            <QueueMockup />
           </Reveal>
         </section>
 

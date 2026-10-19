@@ -1,15 +1,11 @@
 "use client";
 /**
- * Public landing page — "Clean Light Corporate SaaS".
+ * Public landing page — "Clean Corporate SaaS".
  *
- * Presentation only: a light institutional page with the hero (customer /
- * company entry paths), the three-step explainer, the feature grid, the real
- * plan catalogue (`GET /api/plans`) and the institutional footer.
- *
- * Business logic is untouched: the client search posts to `/pesquisar`, the
- * company card links to `/registar-organizacao`, and every plan button follows
- * the real `/checkout?plan=<code>` (or registration) flow with the prices that
- * come from the database.
+ * Light, high-contrast institutional page: a minimal header, a centred hero with
+ * the two entry paths (customer / company), the live queue mockup, the
+ * three-step explainer, the real plan catalogue (`GET /api/plans`) and the
+ * business call to action. Nothing is hard-coded or simulated.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -169,7 +165,7 @@ export default function HomePage() {
             {/* Cliente */}
             <form className="mkt-path mkt-path-client" onSubmit={findQueue}>
               <span className="mkt-path-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="8" r="3.2" />
                   <path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
                 </svg>
@@ -185,19 +181,15 @@ export default function HomePage() {
                   onChange={(event) => setCompanyQuery(event.target.value)}
                 />
               </label>
-              <button type="submit" className="mkt-path-cta">
-                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="M20 20l-3.8-3.8" />
-                </svg>
-                {t("landing.pathClientCta")}
+              <button type="submit" className="mkt-path-link">
+                {t("landing.pathClientCta")} <span aria-hidden="true">→</span>
               </button>
             </form>
 
             {/* Empresa */}
             <div className="mkt-path mkt-path-company">
               <span className="mkt-path-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" />
                   <path d="M14 10h4a2 2 0 0 1 2 2v9" />
                   <path d="M3 21h18" />
@@ -206,14 +198,33 @@ export default function HomePage() {
               </span>
               <h2>{t("landing.pathCompanyTitle")}</h2>
               <p>{t("landing.pathCompanyText")}</p>
-              <Link href="/registar-organizacao" className="mkt-path-cta">
-                <span aria-hidden="true">→</span> {t("landing.createAccountFree")}
-              </Link>
-              <Link href="/login" className="mkt-path-login">
-                {t("landing.pathCompanyLogin")}
+              <Link href="/registar-organizacao" className="btn btn-block mkt-path-cta">
+                <span aria-hidden="true">→</span> {t("landing.registerCompany")}
               </Link>
               <p className="mkt-path-note">{t("landing.pathCompanyNote")}</p>
             </div>
+          </Reveal>
+
+          <Reveal variant="fade" delay={200} className="mkt-hero-metrics">
+            <dl className="mkt-metrics">
+              {metrics.map((metric) => (
+                <div key={metric.label} className="mkt-metric">
+                  <dt>{metric.value}</dt>
+                  <dd>{metric.label}</dd>
+                </div>
+              ))}
+            </dl>
+          </Reveal>
+        </section>
+
+        {/* Produto — painel de filas em tempo real */}
+        <section className="mkt-section mkt-product">
+          <Reveal variant="up" className="mkt-section-head">
+            <h2>{t("landing.productTitle")}</h2>
+            <p>{t("landing.productSubtitle")}</p>
+          </Reveal>
+          <Reveal variant="scale" className="mkt-hero-visual mkt-product-visual">
+            <QueueMockup />
           </Reveal>
         </section>
 

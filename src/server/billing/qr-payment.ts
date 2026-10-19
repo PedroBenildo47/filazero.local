@@ -144,11 +144,41 @@ export function normalizeIban(iban: string): string {
 }
 
 /**
+ * Converts a value into a canonical Angolan IBAN.
+ *
+ * Accepts either a full IBAN (`AO` + 23 digits) or a bare **21-digit BBAN** —
+ * the account number as printed on Angolan statements/bank apps (e.g.
+ * `005100002109917510176`) — for which the ISO 13616 check digits are derived
+ * deterministically (mod-97). The BBAN itself is never altered, only prefixed
+ * with `AO` and its computed check digits.
+ *
+ * Returns the normalized value unchanged when it matches neither shape, so
+ * validation can still reject it.
+ */
+export function toAngolaIban(value: string): string {
+  const normalized = normalizeIban(value);
+  if (/^AO\d{23}$/.test(normalized)) return normalized;
+  if (/^\d{21}$/.test(normalized)) {
+    const digits = `${normalized}AO00`.replace(/[A-Z]/g, (letter) =>
+      String(letter.charCodeAt(0) - 55),
+    );
+    let remainder = 0;
+    for (const character of digits) {
+      remainder = (remainder * 10 + Number(character)) % 97;
+    }
+    const checkDigits = String(98 - remainder).padStart(2, "0");
+    return `AO${checkDigits}${normalized}`;
+  }
+  return normalized;
+}
+
+/**
  * Validates an Angolan IBAN: `AO` + 2 check digits + 21 digits (25 chars), with
- * the ISO 13616 mod-97 check digit verification.
+ * the ISO 13616 mod-97 check digit verification. A bare 21-digit BBAN is first
+ * promoted to its canonical IBAN form.
  */
 export function isValidAngolaIban(iban: string): boolean {
-  const normalized = normalizeIban(iban);
+  const normalized = toAngolaIban(iban);
   if (!/^AO\d{23}$/.test(normalized)) return false;
   const rearranged = normalized.slice(4) + normalized.slice(0, 4);
   const digits = rearranged.replace(/[A-Z]/g, (letter) =>
@@ -215,7 +245,7 @@ function assertQrInput(input: AngolaBankQrInput): void {
 export function buildAngolaBankQr(input: AngolaBankQrInput): string {
   assertQrInput(input);
 
-  const iban = normalizeIban(input.iban);
+  const iban = toAngolaIban(input.iban);
   const dynamic = input.amountCents !== null && input.amountCents !== undefined;
 
   const domestic = [
@@ -243,4 +273,18 @@ export function buildAngolaBankQr(input: AngolaBankQrInput): string {
   ].join("");
 
   return `${body}${CRC_TAG}${CRC_LENGTH}${crc16ccitt(`${body}${CRC_TAG}${CRC_LENGTH}`)}`;
+}
+
+/**
+ * Safe variant of {@link buildAngolaBankQr}: returns `null` instead of throwing
+ * when the QR cannot be built (missing/invalid IBAN, empty reference, bad
+ * amount). Callers use this to degrade to bank-transfer instructions without
+ * ever surfacing a 503 to the payer.
+ */
+export function tryBuildAngolaBankQr(input: AngolaBankQrInput): string | null {
+  try {
+    return buildAngolaBankQr(input);
+  } catch {
+    return null;
+  }
 }
